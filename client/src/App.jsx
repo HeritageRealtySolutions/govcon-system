@@ -50,9 +50,6 @@ export default function App() {
             </div>
           </div>
         </nav>
-        <div className="bg-green-500 text-white text-center text-sm font-bold p-4">
-          ✓ Tailwind CSS is working
-        </div>
         <main className="max-w-screen-2xl mx-auto px-6 py-8">
           <Routes>
             <Route path="/" element={<Dashboard />} />
