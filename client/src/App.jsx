@@ -86,7 +86,7 @@ const NAV = [
 
 export default function App() {
   const [collapsed, setCollapsed] = useState(false);
-
+const location = useLocation();
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-slate-900 flex">
