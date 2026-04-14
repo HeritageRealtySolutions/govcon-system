@@ -163,7 +163,7 @@ export default function App() {
           <header className="h-16 bg-slate-950/80 backdrop-blur border-b border-slate-800 flex items-center px-6 gap-4 sticky top-0 z-40">
             <div className="flex-1">
               <h1 className="text-white font-semibold text-base">
-                {NAV.find(n => n.to === window.location.pathname)?.label ?? 'Dashboard'}
+                {NAV.find(n => n.to === location.pathname)?.label ?? 'Dashboard'}
               </h1>
               <p className="text-slate-500 text-xs">Lumen Capital LLC · Government Contracting System</p>
             </div>
