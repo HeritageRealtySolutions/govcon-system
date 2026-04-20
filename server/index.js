@@ -9,7 +9,7 @@ app.use(express.json());
 async function start() {
   const { initDB } = require('./db');
   await initDB();
-
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
   // Auth routes — no middleware required
   app.use('/api/auth', require('./routes/auth'));
 
