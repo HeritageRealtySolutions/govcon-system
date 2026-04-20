@@ -1,23 +1,52 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db');
+const { supabase } = require('../db');
 
-router.get('/', (req, res) => {
-  res.json(db.prepare(`SELECT * FROM company_profile LIMIT 1`).get() || null);
+router.get('/', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('company_profile')
+      .select('*')
+      .order('id', { ascending: true })
+      .limit(1)
+      .single();
+    if (error && error.code !== 'PGRST116') throw error;
+    res.json(data || {});
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-router.post('/', (req, res) => {
-  const b = req.body;
-  const existing = db.prepare(`SELECT id FROM company_profile LIMIT 1`).get();
-  if (existing) {
-    const fields = Object.keys(b).map(k => `${k} = ?`).join(', ');
-    db.prepare(`UPDATE company_profile SET ${fields} WHERE id = ?`).run(...Object.values(b), existing.id);
-    res.json({ id: existing.id });
-  } else {
-    const keys = Object.keys(b).join(', ');
-    const placeholders = Object.keys(b).map(() => '?').join(', ');
-    const result = db.prepare(`INSERT INTO company_profile (${keys}) VALUES (${placeholders})`).run(...Object.values(b));
-    res.json({ id: result.lastInsertRowid });
+router.post('/', async (req, res) => {
+  try {
+    const { data: existing } = await supabase
+      .from('company_profile')
+      .select('id')
+      .limit(1)
+      .single();
+
+    const payload = { ...req.body, updated_at: new Date().toISOString() };
+
+    if (existing) {
+      const { data, error } = await supabase
+        .from('company_profile')
+        .update(payload)
+        .eq('id', existing.id)
+        .select()
+        .single();
+      if (error) throw error;
+      return res.json(data);
+    }
+
+    const { data, error } = await supabase
+      .from('company_profile')
+      .insert(payload)
+      .select()
+      .single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
