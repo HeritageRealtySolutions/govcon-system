@@ -1,11 +1,9 @@
-[phases.install]
-cmds = ['npm install --include=dev', 'cd client && npm install --include=dev']
-
-[phases.build]
-cmds = ['cd client && npm run build']
-
-[start]
-cmd = 'node server/index.js'
-
-[deploy]
-healthcheckPath = '/health'
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "node server/index.js",
+    "healthcheckPath": "/health"
+  }
+}
