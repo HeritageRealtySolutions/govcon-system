@@ -1,50 +1,115 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db');
+const { supabase } = require('../db');
 
-router.get('/stats', (req, res) => {
-  const total = db.prepare(`SELECT COUNT(*) as count, SUM(proposed_price) as value FROM pipeline`).get();
-  const awarded = db.prepare(`SELECT COUNT(*) as count, SUM(award_amount) as value FROM pipeline WHERE awarded = 1`).get();
-  const submitted = db.prepare(`SELECT COUNT(*) as count FROM pipeline WHERE status IN ('submitted','awarded','lost')`).get();
-  const winRate = submitted.count > 0 ? ((awarded.count / submitted.count) * 100).toFixed(1) : 0;
-  res.json({ total_pipeline: total, awarded, submitted: submitted.count, win_rate: winRate });
+// GET all pipeline items
+router.get('/', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('pipeline')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-router.get('/', (req, res) => {
-  const rows = db.prepare(`
-    SELECT p.*,
-      COALESCE(o.title, m.title) as title,
-      COALESCE(o.agency, m.agency) as agency,
-      COALESCE(o.response_deadline, m.response_deadline) as deadline,
-      COALESCE(o.naics_code, m.naics_code) as naics_code,
-      COALESCE(o.bid_score, m.bid_score) as bid_score,
-      o.set_aside_type, o.source
-    FROM pipeline p
-    LEFT JOIN opportunities o ON p.opportunity_id = o.id
-    LEFT JOIN municipal_bids m ON p.opportunity_id = CAST(m.id AS TEXT)
-    ORDER BY p.created_at DESC
-  `).all();
-  res.json(rows);
+// GET stats
+router.get('/stats', async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('pipeline').select('*');
+    if (error) throw error;
+    const items = data || [];
+
+    const counts = [];
+    const statusMap = {};
+    items.forEach(i => {
+      if (!statusMap[i.status]) statusMap[i.status] = { count: 0, value: 0 };
+      statusMap[i.status].count++;
+      statusMap[i.status].value += parseFloat(i.proposed_price || 0);
+    });
+    Object.entries(statusMap).forEach(([status, v]) => counts.push({ status, ...v }));
+
+    const awarded = items.filter(i => i.status === 'awarded');
+    const awardedValue = awarded.reduce((s, i) => s + parseFloat(i.award_amount || i.proposed_price || 0), 0);
+    const totalCount  = items.filter(i => i.status !== 'lost').length;
+    const totalValue  = items.filter(i => i.status !== 'lost').reduce((s, i) => s + parseFloat(i.proposed_price || 0), 0);
+    const winRate     = items.length > 0 ? Math.round((awarded.length / items.length) * 100) : 0;
+
+    res.json({
+      counts,
+      total_pipeline: { count: totalCount, value: totalValue },
+      awarded: { count: awarded.length, value: awardedValue },
+      win_rate: winRate,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-router.post('/', (req, res) => {
-  const { opportunity_id, proposed_price, notes } = req.body;
-  const existing = db.prepare(`SELECT id FROM pipeline WHERE opportunity_id = ?`).get(opportunity_id);
-  if (existing) return res.json({ id: existing.id, already_exists: true });
-  const result = db.prepare(`
-    INSERT INTO pipeline (opportunity_id, proposed_price, notes) VALUES (?, ?, ?)
-  `).run(opportunity_id, proposed_price, notes);
-  res.json({ id: result.lastInsertRowid });
+// POST add to pipeline
+router.post('/', async (req, res) => {
+  try {
+    const { opportunity_id } = req.body;
+
+    // Check duplicate
+    const { data: existing } = await supabase
+      .from('pipeline')
+      .select('id')
+      .eq('opportunity_id', String(opportunity_id))
+      .single();
+
+    if (existing) return res.json({ already_exists: true, id: existing.id });
+
+    // Get opportunity details
+    const { data: opp } = await supabase
+      .from('opportunities')
+      .select('*')
+      .eq('id', opportunity_id)
+      .single();
+
+    const { data, error } = await supabase.from('pipeline').insert({
+      opportunity_id: String(opportunity_id),
+      title:          opp?.title || 'Untitled',
+      agency:         opp?.agency || '',
+      deadline:       opp?.response_deadline || null,
+      bid_score:      opp?.bid_score || 0,
+      status:         'reviewing',
+    }).select().single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-router.patch('/:id', (req, res) => {
-  const allowed = ['status','bid_decision','proposed_price','historical_avg_price','historical_low_price',
-    'historical_high_price','competitor_count','notes','proposal_draft','submission_date','award_date','awarded','award_amount'];
-  const updates = Object.fromEntries(Object.entries(req.body).filter(([k]) => allowed.includes(k)));
-  if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'No valid fields' });
-  const fields = Object.keys(updates).map(k => `${k} = ?`).join(', ');
-  db.prepare(`UPDATE pipeline SET ${fields} WHERE id = ?`).run(...Object.values(updates), req.params.id);
-  res.json({ success: true });
+// PATCH update pipeline item
+router.patch('/:id', async (req, res) => {
+  try {
+    const updates = { ...req.body, updated_at: new Date().toISOString() };
+    const { error } = await supabase
+      .from('pipeline')
+      .update(updates)
+      .eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE pipeline item
+router.delete('/:id', async (req, res) => {
+  try {
+    const { error } = await supabase.from('pipeline').delete().eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;
