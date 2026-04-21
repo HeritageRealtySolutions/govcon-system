@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BASE_URL } from '../utils/api';
+import { BASE_URL, authFetch } from '../utils/api';
 
 function StatCard({ label, value, sub, accent = 'green', icon }) {
   const styles = {
@@ -51,12 +51,12 @@ export default function Dashboard() {
   const [syncError, setSyncError] = useState('');
 
   useEffect(() => {
-    fetch(`${BASE_URL}/api/opportunities/stats`).then(r => r.json()).then(setOppStats).catch(() => {});
-    fetch(`${BASE_URL}/api/pipeline/stats`).then(r => r.json()).then(setPipeStats).catch(() => {});
+    authFetch(`${BASE_URL}/api/opportunities/stats`).then(r => r.json()).then(setOppStats).catch(() => {});
+    authFetch(`${BASE_URL}/api/pipeline/stats`).then(r => r.json()).then(setPipeStats).catch(() => {});
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() + 14);
-    fetch(`${BASE_URL}/api/opportunities`).then(r => r.json()).then(data => {
-      const soon = (data || [])
+    authFetch(`${BASE_URL}/api/opportunities`).then(r => r.json()).then(data => {
+      const soon = (Array.isArray(data) ? data : [])
         .filter(o => o.response_deadline &&
           new Date(o.response_deadline) <= cutoff &&
           new Date(o.response_deadline) >= new Date())
@@ -68,45 +68,38 @@ export default function Dashboard() {
   async function syncFederal() {
     setSyncing(true); setSyncMsg(''); setSyncError('');
     try {
-      const r = await fetch(`${BASE_URL}/api/opportunities/sync`);
+      const r = await authFetch(`${BASE_URL}/api/opportunities/sync`);
       const d = await r.json();
       if (d.error) setSyncError(d.error);
       else {
         setSyncMsg(`✓ ${d.saved} new opportunities saved (${d.total} found)`);
-        fetch(`${BASE_URL}/api/opportunities/stats`).then(r => r.json()).then(setOppStats);
+        authFetch(`${BASE_URL}/api/opportunities/stats`).then(r => r.json()).then(setOppStats);
       }
     } catch (e) { setSyncError(e.message); }
     setSyncing(false);
   }
 
-  const totalOpps  = (oppStats?.counts || []).reduce((s, c) => s + c.count, 0);
-  const pipeValue  = pipeStats?.total_pipeline?.value;
-  const fmt        = n => n ? `$${(n / 1000).toFixed(0)}K` : '$0';
-  const today      = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const totalOpps = (oppStats?.counts || []).reduce((s, c) => s + c.count, 0);
+  const pipeValue = pipeStats?.total_pipeline?.value;
+  const fmt       = n => n ? `$${(n / 1000).toFixed(0)}K` : '$0';
+  const today     = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   return (
     <div className="space-y-6">
-
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Command Center</h1>
-          <p className="text-slate-400 text-sm mt-0.5">{today} · 8(a) Federal &amp; Municipal Contracting</p>
+          <p className="text-slate-400 text-sm mt-0.5">{today} · 8(a) Federal & Municipal Contracting</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={syncFederal}
-            disabled={syncing}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-          >
+          <button onClick={syncFederal} disabled={syncing}
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
             {syncing
               ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Syncing...</>
               : '⟳ Sync Federal Bids'}
           </button>
-          <button
-            onClick={() => nav('/municipal')}
-            className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors border border-green-700/40 text-green-300 hover:text-white"
-          >
+          <button onClick={() => nav('/municipal')}
+            className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-green-300 hover:text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors border border-green-700/40">
             + Submit a Bid
           </button>
         </div>
@@ -115,18 +108,14 @@ export default function Dashboard() {
       {syncMsg   && <div className="bg-green-900/30 border border-green-700/50 text-green-300 text-sm px-4 py-3 rounded-lg">{syncMsg}</div>}
       {syncError && <div className="bg-red-900/30 border border-red-700/50 text-red-300 text-sm px-4 py-3 rounded-lg">Error: {syncError}</div>}
 
-      {/* Stat Cards */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard label="Total Opportunities" value={totalOpps || 0}                       accent="blue"   icon="📋" sub="federal + municipal" />
-        <StatCard label="Hot Leads"           value={oppStats?.hot_leads || 0}             accent="green"  icon="🔥" sub="score ≥ 70" />
+        <StatCard label="Total Opportunities" value={totalOpps || 0}                        accent="blue"   icon="📋" sub="federal + municipal" />
+        <StatCard label="Hot Leads"           value={oppStats?.hot_leads || 0}              accent="green"  icon="🔥" sub="score ≥ 70" />
         <StatCard label="Active Pipeline"     value={pipeStats?.total_pipeline?.count || 0} accent="yellow" icon="⚡" sub={pipeValue ? `${fmt(pipeValue)} total value` : 'no bids tracked'} />
-        <StatCard label="Win Rate"            value={`${pipeStats?.win_rate || 0}%`}        accent="purple" icon="🏆" sub={`${pipeStats?.awarded?.count || 0} awards · ${fmt(pipeStats?.awarded?.value)} won`} />
+        <StatCard label="Win Rate"            value={`${pipeStats?.win_rate || 0}%`}         accent="purple" icon="🏆" sub={`${pipeStats?.awarded?.count || 0} awards · ${fmt(pipeStats?.awarded?.value)} won`} />
       </div>
 
-      {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        {/* Deadlines — 2 cols */}
         <div className="lg:col-span-2 bg-slate-800/60 border border-slate-700/60 rounded-xl">
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/60">
             <h2 className="text-white font-semibold text-sm">⏰ Upcoming Deadlines — Next 14 Days</h2>
@@ -144,9 +133,9 @@ export default function Dashboard() {
                 return (
                   <li key={d.id} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-700/30 transition-colors">
                     <div className={`w-10 h-10 rounded-lg flex flex-col items-center justify-center text-xs font-bold flex-shrink-0 ${
-                      days <= 3  ? 'bg-red-900/60 text-red-300' :
-                      days <= 7  ? 'bg-yellow-900/60 text-yellow-300' :
-                                   'bg-slate-700 text-slate-300'
+                      days <= 3 ? 'bg-red-900/60 text-red-300' :
+                      days <= 7 ? 'bg-yellow-900/60 text-yellow-300' :
+                      'bg-slate-700 text-slate-300'
                     }`}>
                       <span className="text-lg leading-none">{days}</span>
                       <span className="text-[9px] uppercase tracking-wide">days</span>
@@ -158,10 +147,10 @@ export default function Dashboard() {
                         {d.agency && ` · ${d.agency}`}
                       </p>
                     </div>
-                    {d.score && (
+                    {d.bid_score && (
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
-                        d.score >= 70 ? 'bg-green-900/50 text-green-400' : 'bg-slate-700 text-slate-400'
-                      }`}>{d.score}</span>
+                        d.bid_score >= 70 ? 'bg-green-900/50 text-green-400' : 'bg-slate-700 text-slate-400'
+                      }`}>{d.bid_score}</span>
                     )}
                   </li>
                 );
@@ -170,7 +159,6 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Pipeline Summary — 1 col */}
         <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl">
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700/60">
             <h2 className="text-white font-semibold text-sm">📊 Pipeline Status</h2>
@@ -194,8 +182,6 @@ export default function Dashboard() {
               ))}
             </ul>
           )}
-
-          {/* Quick Actions */}
           <div className="px-5 py-4 border-t border-slate-700/60 space-y-2">
             <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-3">Quick Actions</p>
             {[
@@ -204,18 +190,14 @@ export default function Dashboard() {
               { label: '✍️ Generate Proposal',   path: '/proposals' },
               { label: '⚙️ Company Profile',     path: '/setup' },
             ].map(a => (
-              <button
-                key={a.path}
-                onClick={() => nav(a.path)}
-                className="w-full text-left text-slate-300 hover:text-white hover:bg-slate-700/60 text-xs font-medium px-3 py-2 rounded-lg transition-colors"
-              >
+              <button key={a.path} onClick={() => nav(a.path)}
+                className="w-full text-left text-slate-300 hover:text-white hover:bg-slate-700/60 text-xs font-medium px-3 py-2 rounded-lg transition-colors">
                 {a.label}
               </button>
             ))}
           </div>
         </div>
       </div>
-
     </div>
   );
 }
