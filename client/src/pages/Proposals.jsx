@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { BASE_URL } from '../utils/api';
+import { BASE_URL, authFetch } from '../utils/api';
 
 const TPL_NAMES = [
-  { key: 'technical_approach', label: 'Technical Approach' },
-  { key: 'past_performance',   label: 'Past Performance' },
-  { key: 'management_approach',label: 'Management Approach' },
-  { key: 'company_profile',    label: 'Company Profile' },
+  { key: 'technical_approach',  label: 'Technical Approach' },
+  { key: 'past_performance',    label: 'Past Performance' },
+  { key: 'management_approach', label: 'Management Approach' },
+  { key: 'company_profile',     label: 'Company Profile' },
 ];
 
 const STATUS_COLORS = {
@@ -16,19 +16,14 @@ const STATUS_COLORS = {
   lost:      'bg-red-900/50 text-red-300 border-red-700',
 };
 
-function fmt(n) {
-  if (!n) return '—';
-  return '$' + Number(n).toLocaleString();
-}
+function fmt(n) { if (!n) return '—'; return '$' + Number(n).toLocaleString(); }
 
 function ProposalSection({ title, children, accent, collapsible = false }) {
   const [open, setOpen] = useState(true);
   return (
     <div className={`rounded-xl border overflow-hidden ${accent ? 'bg-green-950/40 border-green-700/50' : 'bg-slate-800/60 border-slate-700/60'}`}>
-      <button
-        onClick={() => collapsible && setOpen(o => !o)}
-        className={`w-full flex items-center justify-between px-5 py-3.5 text-left ${collapsible ? 'hover:bg-slate-700/30 transition-colors' : ''}`}
-      >
+      <button onClick={() => collapsible && setOpen(o => !o)}
+        className={`w-full flex items-center justify-between px-5 py-3.5 text-left ${collapsible ? 'hover:bg-slate-700/30 transition-colors' : ''}`}>
         <h3 className={`text-xs font-bold uppercase tracking-wider ${accent ? 'text-green-400' : 'text-slate-400'}`}>{title}</h3>
         {collapsible && <span className={`text-slate-500 text-xs transition-transform ${open ? '' : 'rotate-180'}`}>▲</span>}
       </button>
@@ -38,31 +33,31 @@ function ProposalSection({ title, children, accent, collapsible = false }) {
 }
 
 export default function Proposals() {
-  const [opps, setOpps]           = useState([]);
-  const [municipal, setMunicipal] = useState([]);
-  const [history, setHistory]     = useState([]);
-  const [source, setSource]       = useState('federal');
-  const [selected, setSelected]   = useState('');
-  const [result, setResult]       = useState(null);
-  const [estimate, setEstimate]   = useState(null);
-  const [loading, setLoading]     = useState(false);
-  const [estimating, setEstimating] = useState(false);
-  const [error, setError]         = useState('');
-  const [templates, setTemplates] = useState({});
-  const [editingTpl, setEditingTpl] = useState(null);
-  const [tplContent, setTplContent] = useState('');
-  const [tplSaved, setTplSaved]   = useState(false);
-  const [activeTab, setActiveTab] = useState('generate');
+  const [opps, setOpps]               = useState([]);
+  const [municipal, setMunicipal]     = useState([]);
+  const [history, setHistory]         = useState([]);
+  const [source, setSource]           = useState('federal');
+  const [selected, setSelected]       = useState('');
+  const [result, setResult]           = useState(null);
+  const [estimate, setEstimate]       = useState(null);
+  const [loading, setLoading]         = useState(false);
+  const [estimating, setEstimating]   = useState(false);
+  const [error, setError]             = useState('');
+  const [templates, setTemplates]     = useState({});
+  const [editingTpl, setEditingTpl]   = useState(null);
+  const [tplContent, setTplContent]   = useState('');
+  const [tplSaved, setTplSaved]       = useState(false);
+  const [activeTab, setActiveTab]     = useState('generate');
 
   useEffect(() => {
-    fetch(`${BASE_URL}/api/opportunities`).then(r => r.json()).then(setOpps).catch(() => {});
-    fetch(`${BASE_URL}/api/municipal`).then(r => r.json()).then(setMunicipal).catch(() => {});
-    fetch(`${BASE_URL}/api/proposals/templates/all`).then(r => r.json()).then(setTemplates).catch(() => {});
+    authFetch(`${BASE_URL}/api/opportunities`).then(r => r.json()).then(d => setOpps(Array.isArray(d) ? d : [])).catch(() => {});
+    authFetch(`${BASE_URL}/api/municipal`).then(r => r.json()).then(d => setMunicipal(Array.isArray(d) ? d : [])).catch(() => {});
+    authFetch(`${BASE_URL}/api/proposals/templates/all`).then(r => r.json()).then(setTemplates).catch(() => {});
     loadHistory();
   }, []);
 
   function loadHistory() {
-    fetch(`${BASE_URL}/api/proposals`).then(r => r.json()).then(setHistory).catch(() => {});
+    authFetch(`${BASE_URL}/api/proposals`).then(r => r.json()).then(d => setHistory(Array.isArray(d) ? d : [])).catch(() => {});
   }
 
   const list        = source === 'federal' ? opps : municipal;
@@ -72,7 +67,7 @@ export default function Proposals() {
     if (!selectedOpp) return;
     setEstimating(true);
     try {
-      const r = await fetch(`${BASE_URL}/api/proposals/estimate`, {
+      const r = await authFetch(`${BASE_URL}/api/proposals/estimate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ opportunity: selectedOpp }),
@@ -87,7 +82,7 @@ export default function Proposals() {
     if (!selectedOpp) return;
     setLoading(true); setError(''); setResult(null);
     try {
-      const r = await fetch(`${BASE_URL}/api/proposals/generate`, {
+      const r = await authFetch(`${BASE_URL}/api/proposals/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ opportunity: selectedOpp }),
@@ -100,7 +95,7 @@ export default function Proposals() {
   }
 
   async function updateStatus(id, status) {
-    await fetch(`${BASE_URL}/api/proposals/${id}/status`, {
+    await authFetch(`${BASE_URL}/api/proposals/${id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
@@ -109,13 +104,13 @@ export default function Proposals() {
   }
 
   async function loadProposal(id) {
-    const r = await fetch(`${BASE_URL}/api/proposals/${id}`);
+    const r = await authFetch(`${BASE_URL}/api/proposals/${id}`);
     const d = await r.json();
     if (d.proposal_data) { setResult(d.proposal_data); setEstimate(d.cost_estimate); setActiveTab('generate'); }
   }
 
   async function saveTpl() {
-    await fetch(`${BASE_URL}/api/proposals/templates/${editingTpl}`, {
+    await authFetch(`${BASE_URL}/api/proposals/templates/${editingTpl}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: tplContent }),
@@ -123,87 +118,6 @@ export default function Proposals() {
     setTemplates(t => ({ ...t, [editingTpl]: tplContent }));
     setTplSaved(true);
     setTimeout(() => setTplSaved(false), 3000);
-  }
-
-  function exportText() {
-    if (!result || !selectedOpp) return;
-    const ce = result.cost_estimate || estimate || {};
-    const lines = [
-      'LUMEN CAPITAL LLC — PROPOSAL DRAFT',
-      '8(a) Certified | Black-Owned Small Business',
-      '═'.repeat(60),
-      '',
-      `Opportunity : ${selectedOpp.title}`,
-      `Agency      : ${selectedOpp.agency || '—'}`,
-      `NAICS       : ${selectedOpp.naics_code || '—'}`,
-      `Bid Number  : ${selectedOpp.bid_number || selectedOpp.notice_id || '—'}`,
-      `Deadline    : ${selectedOpp.response_deadline || '—'}`,
-      `Generated   : ${new Date().toLocaleDateString()}`,
-      '',
-      '═'.repeat(60),
-      'COVER LETTER',
-      '─'.repeat(60),
-      result.cover_letter || '',
-      '',
-      '═'.repeat(60),
-      'EXECUTIVE SUMMARY',
-      '─'.repeat(60),
-      result.executive_summary || '',
-      '',
-      '═'.repeat(60),
-      'TECHNICAL APPROACH',
-      '─'.repeat(60),
-      result.technical_approach || '',
-      '',
-      '═'.repeat(60),
-      'MANAGEMENT APPROACH',
-      '─'.repeat(60),
-      result.management_approach || '',
-      '',
-      '═'.repeat(60),
-      'PAST PERFORMANCE',
-      '─'.repeat(60),
-      result.past_performance || '',
-      '',
-      '═'.repeat(60),
-      'PRICING & COST BUILDUP',
-      '─'.repeat(60),
-      result.price_narrative || '',
-      '',
-      ce.labor_lines
-        ? [
-            'COST DETAIL:',
-            ...(ce.labor_lines || []).map(l => `  ${l.role.padEnd(30)} ${l.hours} hrs × $${l.rate}/hr = $${l.cost.toLocaleString()}`),
-            `  ${'Materials'.padEnd(30)} $${(ce.material_cost || 0).toLocaleString()}`,
-            `  ${'Subcontractors'.padEnd(30)} $${(ce.subcontractor || 0).toLocaleString()}`,
-            `  ${'Overhead (${ce.overhead_pct}%)'.padEnd(30)} $${(ce.overhead || 0).toLocaleString()}`,
-            `  ${'Profit (${ce.profit_pct}%)'.padEnd(30)} $${(ce.profit || 0).toLocaleString()}`,
-            `  ${'─'.repeat(50)}`,
-            `  ${'TOTAL BID'.padEnd(30)} $${(ce.total_bid || 0).toLocaleString()}`,
-            `  Bid Range: $${(ce.bid_range_low || 0).toLocaleString()} – $${(ce.bid_range_high || 0).toLocaleString()}`,
-          ].join('\n')
-        : '',
-      '',
-      '═'.repeat(60),
-      'KEY DIFFERENTIATORS',
-      '─'.repeat(60),
-      ...(result.differentiators || []).map(d => `  ✓ ${d}`),
-      '',
-      '═'.repeat(60),
-      'COMPLIANCE & CERTIFICATIONS',
-      '─'.repeat(60),
-      result.compliance_notes || '',
-      '',
-      '═'.repeat(60),
-      '[INTERNAL] WIN STRATEGY NOTE',
-      '─'.repeat(60),
-      result.win_strategy || '',
-    ];
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `proposal_${(selectedOpp.title || 'draft').substring(0, 30).replace(/\s+/g, '_')}_${Date.now()}.txt`;
-    a.click();
   }
 
   const inputCls = "w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30 transition-colors";
@@ -215,7 +129,6 @@ export default function Proposals() {
         <p className="text-slate-400 text-sm mt-1">Generate complete proposals with cost calculations from any opportunity</p>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 bg-slate-800/60 border border-slate-700/60 rounded-xl p-1 w-fit">
         {[
           { id: 'generate', label: '✍️ Generate' },
@@ -231,11 +144,8 @@ export default function Proposals() {
         ))}
       </div>
 
-      {/* ── GENERATE TAB ─────────────────────────────────── */}
       {activeTab === 'generate' && (
         <div className="space-y-5">
-
-          {/* Controls */}
           <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-5">
             <h2 className="text-white font-semibold text-sm mb-4">Select Opportunity</h2>
             <div className="flex flex-wrap gap-3 items-end">
@@ -254,58 +164,39 @@ export default function Proposals() {
                   onChange={e => { setSelected(e.target.value); setResult(null); setEstimate(null); }}
                   className={inputCls}>
                   <option value="">Choose an opportunity...</option>
-                  {list.map(o => (
-                    <option key={o.id} value={o.id}>{o.title?.substring(0, 80)}</option>
-                  ))}
+                  {list.map(o => <option key={o.id} value={o.id}>{o.title?.substring(0, 80)}</option>)}
                 </select>
               </div>
               <div className="flex gap-2 flex-wrap">
                 <button onClick={getEstimate} disabled={!selected || estimating}
                   className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors border border-slate-600">
-                  {estimating
-                    ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block"/>Calculating...</>
-                    : '💰 Cost Estimate'
-                  }
+                  {estimating ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block"/>Calculating...</> : '💰 Cost Estimate'}
                 </button>
                 <button onClick={generate} disabled={!selected || loading}
                   className="flex items-center gap-2 bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
-                  {loading
-                    ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block"/>Generating...</>
-                    : '✦ Generate Full Proposal'
-                  }
+                  {loading ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block"/>Generating...</> : '✦ Generate Full Proposal'}
                 </button>
-                {result && (
-                  <button onClick={exportText}
-                    className="bg-slate-700 hover:bg-slate-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
-                    ↓ Export .txt
-                  </button>
-                )}
               </div>
             </div>
-
-            {error && (
-              <div className="mt-4 bg-red-900/30 border border-red-700/50 text-red-300 text-sm px-4 py-3 rounded-lg">{error}</div>
-            )}
-
+            {error && <div className="mt-4 bg-red-900/30 border border-red-700/50 text-red-300 text-sm px-4 py-3 rounded-lg">{error}</div>}
             {loading && (
               <div className="mt-4 bg-slate-700/40 rounded-lg px-4 py-3">
                 <div className="flex items-center gap-3">
                   <span className="w-4 h-4 border-2 border-slate-500 border-t-green-400 rounded-full animate-spin inline-block"/>
-                  <span className="text-slate-300 text-sm">Claude is writing your proposal — cover letter, technical approach, management plan, past performance, pricing narrative...</span>
+                  <span className="text-slate-300 text-sm">Claude is writing your proposal — cover letter, technical approach, management plan, past performance, pricing...</span>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Cost Estimate */}
           {estimate && estimate.labor_lines && (
             <ProposalSection title="💰 Cost Estimate & Bid Calculation" accent>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
-                    { label: 'Total Labor',    value: fmt(estimate.total_labor) },
-                    { label: 'Materials',      value: fmt(estimate.material_cost) },
-                    { label: 'Subcontractors', value: fmt(estimate.subcontractor) },
+                    { label: 'Total Labor',       value: fmt(estimate.total_labor) },
+                    { label: 'Materials',         value: fmt(estimate.material_cost) },
+                    { label: 'Subcontractors',    value: fmt(estimate.subcontractor) },
                     { label: 'Overhead & Profit', value: fmt((estimate.overhead || 0) + (estimate.profit || 0)) },
                   ].map(c => (
                     <div key={c.label} className="bg-slate-900/60 rounded-lg px-3 py-3">
@@ -314,55 +205,20 @@ export default function Proposals() {
                     </div>
                   ))}
                 </div>
-
-                {/* Labor breakdown */}
-                <div className="bg-slate-900/40 rounded-lg overflow-hidden">
-                  <div className="px-4 py-2 border-b border-slate-700/60">
-                    <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Labor Detail — {estimate.naics_description}</p>
-                  </div>
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-slate-700/40">
-                        {['Role','Hours','Rate/hr','Cost'].map(h => (
-                          <th key={h} className="text-left text-slate-500 text-xs px-4 py-2">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-700/30">
-                      {(estimate.labor_lines || []).map((l, i) => (
-                        <tr key={i} className="hover:bg-slate-800/40">
-                          <td className="px-4 py-2 text-slate-300 text-sm">{l.role}</td>
-                          <td className="px-4 py-2 text-slate-400 text-sm">{l.hours}</td>
-                          <td className="px-4 py-2 text-slate-400 text-sm">${l.rate}</td>
-                          <td className="px-4 py-2 text-white text-sm font-medium">{fmt(l.cost)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Total */}
                 <div className="flex items-center justify-between bg-green-900/20 border border-green-700/40 rounded-lg px-5 py-4">
                   <div>
                     <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Recommended Bid Range</p>
-                    <p className="text-white text-sm mt-0.5">
-                      {fmt(estimate.bid_range_low)} – {fmt(estimate.bid_range_high)}
-                    </p>
+                    <p className="text-white text-sm mt-0.5">{fmt(estimate.bid_range_low)} – {fmt(estimate.bid_range_high)}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Total Bid</p>
                     <p className="text-green-400 text-3xl font-bold">{fmt(estimate.total_bid)}</p>
                   </div>
                 </div>
-
-                {estimate.benchmark_note && (
-                  <p className="text-slate-400 text-xs px-1">{estimate.benchmark_note}</p>
-                )}
               </div>
             </ProposalSection>
           )}
 
-          {/* Full Proposal Output */}
           {result && (
             <div className="space-y-4">
               <div className="flex items-center gap-3">
@@ -371,31 +227,24 @@ export default function Proposals() {
                   Saved · ID #{result.proposal_id}
                 </span>
               </div>
-
               <ProposalSection title="Cover Letter" collapsible>
                 <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">{result.cover_letter}</p>
               </ProposalSection>
-
               <ProposalSection title="Executive Summary" collapsible>
                 <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">{result.executive_summary}</p>
               </ProposalSection>
-
               <ProposalSection title="Technical Approach" collapsible>
                 <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">{result.technical_approach}</p>
               </ProposalSection>
-
               <ProposalSection title="Management Approach" collapsible>
                 <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">{result.management_approach}</p>
               </ProposalSection>
-
               <ProposalSection title="Past Performance" collapsible>
                 <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">{result.past_performance}</p>
               </ProposalSection>
-
               <ProposalSection title="Price Narrative" collapsible>
                 <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">{result.price_narrative}</p>
               </ProposalSection>
-
               <ProposalSection title="Key Differentiators">
                 <ul className="space-y-2.5">
                   {(result.differentiators || []).map((d, i) => (
@@ -406,11 +255,6 @@ export default function Proposals() {
                   ))}
                 </ul>
               </ProposalSection>
-
-              <ProposalSection title="Compliance & Certifications">
-                <p className="text-slate-300 text-sm leading-relaxed">{result.compliance_notes}</p>
-              </ProposalSection>
-
               <div className="bg-yellow-900/20 border border-yellow-700/30 rounded-xl px-5 py-4">
                 <p className="text-yellow-400 text-xs font-bold uppercase tracking-wider mb-2">⚠ Internal — Win Strategy Note</p>
                 <p className="text-slate-300 text-sm leading-relaxed">{result.win_strategy}</p>
@@ -420,12 +264,11 @@ export default function Proposals() {
         </div>
       )}
 
-      {/* ── HISTORY TAB ──────────────────────────────────── */}
       {activeTab === 'history' && (
         <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-700/60">
             <h2 className="text-white font-semibold text-sm">Proposal History</h2>
-            <p className="text-slate-500 text-xs mt-0.5">All generated proposals — click to reload</p>
+            <p className="text-slate-500 text-xs mt-0.5">All generated proposals — click Load to reload</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -444,19 +287,14 @@ export default function Proposals() {
                     <td className="px-4 py-3 text-slate-400 text-sm">{p.agency || '—'}</td>
                     <td className="px-4 py-3 text-slate-300 text-sm">{fmt(p.estimated_value)}</td>
                     <td className="px-4 py-3">
-                      <select
-                        value={p.status}
-                        onChange={e => updateStatus(p.id, e.target.value)}
-                        className={`text-xs font-semibold px-2 py-1 rounded-full border bg-transparent cursor-pointer ${STATUS_COLORS[p.status] || STATUS_COLORS.draft}`}
-                      >
+                      <select value={p.status} onChange={e => updateStatus(p.id, e.target.value)}
+                        className={`text-xs font-semibold px-2 py-1 rounded-full border bg-transparent cursor-pointer ${STATUS_COLORS[p.status] || STATUS_COLORS.draft}`}>
                         {['draft','review','submitted','awarded','lost'].map(s => (
                           <option key={s} value={s} className="bg-slate-800 text-white">{s}</option>
                         ))}
                       </select>
                     </td>
-                    <td className="px-4 py-3 text-slate-500 text-xs">
-                      {new Date(p.created_at).toLocaleDateString()}
-                    </td>
+                    <td className="px-4 py-3 text-slate-500 text-xs">{new Date(p.created_at).toLocaleDateString()}</td>
                     <td className="px-4 py-3">
                       <button onClick={() => loadProposal(p.id)}
                         className="text-green-400 hover:text-green-300 text-xs font-semibold px-2.5 py-1 rounded-lg hover:bg-green-900/30 transition-colors">
@@ -466,12 +304,9 @@ export default function Proposals() {
                   </tr>
                 ))}
                 {history.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="py-14 text-center">
-                      <p className="text-slate-500 text-sm">No proposals generated yet</p>
-                      <p className="text-slate-600 text-xs mt-1">Use the Generate tab to create your first proposal</p>
-                    </td>
-                  </tr>
+                  <tr><td colSpan={7} className="py-14 text-center">
+                    <p className="text-slate-500 text-sm">No proposals generated yet</p>
+                  </td></tr>
                 )}
               </tbody>
             </table>
@@ -479,12 +314,11 @@ export default function Proposals() {
         </div>
       )}
 
-      {/* ── TEMPLATES TAB ────────────────────────────────── */}
       {activeTab === 'templates' && (
         <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-700/60">
             <h2 className="text-white font-semibold text-sm">Base Templates</h2>
-            <p className="text-slate-500 text-xs mt-0.5">AI uses these as context when generating proposals — fill them in with your real company details</p>
+            <p className="text-slate-500 text-xs mt-0.5">AI uses these as context — fill in with your real company details</p>
           </div>
           <div className="p-5 space-y-4">
             <div className="flex flex-wrap gap-2">
@@ -500,17 +334,11 @@ export default function Proposals() {
                 </button>
               ))}
             </div>
-
             {editingTpl && (
               <div className="space-y-3">
-                <p className="text-slate-500 text-xs">
-                  Fill in your actual company details here. The more specific, the better your proposals will be.
-                </p>
-                <textarea rows={12} value={tplContent}
-                  onChange={e => setTplContent(e.target.value)}
+                <textarea rows={12} value={tplContent} onChange={e => setTplContent(e.target.value)}
                   className="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-4 py-3 text-slate-300 text-sm font-mono leading-relaxed resize-y focus:outline-none focus:border-green-500"
-                  placeholder={`Enter your ${editingTpl.replace(/_/g, ' ')} content here...`}
-                />
+                  placeholder={`Enter your ${editingTpl.replace(/_/g, ' ')} content here...`} />
                 <div className="flex items-center gap-3">
                   <button onClick={saveTpl}
                     className="bg-green-600 hover:bg-green-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
