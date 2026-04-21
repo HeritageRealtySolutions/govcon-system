@@ -34,7 +34,6 @@ async function fetchCompetitors(naicsCode) {
   );
 
   const results = response.data?.results || [];
-
   const companyMap = {};
   for (const r of results) {
     const name   = r['Recipient Name'];
@@ -65,7 +64,6 @@ async function fetchCompetitors(naicsCode) {
 router.get('/competitors/:naicsCode', async (req, res) => {
   try {
     const { naicsCode } = req.params;
-
     const { data: existing } = await supabase
       .from('competitors')
       .select('*')
@@ -78,13 +76,10 @@ router.get('/competitors/:naicsCode', async (req, res) => {
     }
 
     const competitors = await fetchCompetitors(naicsCode);
-
     await supabase.from('competitors').delete().eq('naics_code', naicsCode);
-
     if (competitors.length > 0) {
       await supabase.from('competitors').insert(competitors);
     }
-
     res.json(competitors.map(c => ({ ...c, top_agencies: safeParseAgencies(c.top_agencies) })));
   } catch (err) {
     console.error('Competitor fetch error:', err.message);
@@ -182,11 +177,9 @@ router.get('/naics-scores', async (req, res) => {
     }
 
     const scores = await Promise.all(Object.keys(NAICS_MAP).map(scoreNaics));
-
     for (const score of scores) {
       await supabase.from('naics_scores').upsert(score, { onConflict: 'naics_code' });
     }
-
     res.json([...scores].sort((a, b) => b.score - a.score));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -225,7 +218,6 @@ router.get('/roi', async (req, res) => {
       const contractValue = parseFloat(item.award_amount || item.proposed_price || 0);
       const awardAmount   = parseFloat(item.award_amount || 0);
 
-      // Calibrated ROI: actual outcomes override probability estimates
       const isAwarded = item.status === 'awarded';
       const isLost    = item.status === 'lost';
 
@@ -258,10 +250,10 @@ router.get('/roi', async (req, res) => {
       };
     });
 
-    const totalBidCost     = summary.reduce((s, i) => s + i.bid_cost, 0);
-    const totalAwarded     = summary.filter(i => i.status === 'awarded');
-    const totalRevenue     = totalAwarded.reduce((s, i) => s + (parseFloat(i.award_amount) || parseFloat(i.contract_value) || 0), 0);
-    const costPerAward     = totalAwarded.length > 0 ? totalBidCost / totalAwarded.length : 0;
+    const totalBidCost = summary.reduce((s, i) => s + i.bid_cost, 0);
+    const totalAwarded = summary.filter(i => i.status === 'awarded');
+    const totalRevenue = totalAwarded.reduce((s, i) => s + (parseFloat(i.award_amount) || parseFloat(i.contract_value) || 0), 0);
+    const costPerAward = totalAwarded.length > 0 ? totalBidCost / totalAwarded.length : 0;
 
     res.json({
       items: summary,
@@ -287,10 +279,237 @@ router.patch('/roi/:id', async (req, res) => {
     if (hourly_rate     !== undefined) updates.hourly_rate     = hourly_rate;
     if (win_probability !== undefined) updates.win_probability = win_probability;
     updates.updated_at = new Date().toISOString();
-
     const { error } = await supabase.from('pipeline').update(updates).eq('id', req.params.id);
     if (error) throw error;
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── RECOMPETE ALERTS ────────────────────────────────────────────────────────
+
+function urgencyFromDays(days) {
+  if (days <= 30)  return 'critical';
+  if (days <= 60)  return 'high';
+  if (days <= 90)  return 'medium';
+  if (days <= 180) return 'watch';
+  return 'long';
+}
+
+async function fetchRecompetesForNaics(naicsCode) {
+  // USASpending: pull awards where period_of_performance_current_end_date is in future
+  // but within 180 days, filtered to this NAICS
+  const now = new Date();
+  const endOfWindow = new Date(now.getTime() + 180 * 24 * 60 * 60 * 1000);
+
+  const response = await axios.post(
+    'https://api.usaspending.gov/api/v2/search/spending_by_award/',
+    {
+      filters: {
+        naics_codes: [naicsCode],
+        time_period: [{
+          start_date: now.toISOString().split('T')[0],
+          end_date: endOfWindow.toISOString().split('T')[0],
+          date_type: 'action_date',
+        }],
+      },
+      fields: [
+        'Award ID', 'Recipient Name', 'Award Amount',
+        'awarding_agency_name', 'Description',
+        'Start Date', 'End Date',
+      ],
+      limit: 100,
+      page: 1,
+    },
+    { timeout: 30000 }
+  );
+
+  const results = response.data?.results || [];
+  const recompetes = [];
+
+  for (const r of results) {
+    const endDate = r['End Date'];
+    if (!endDate) continue;
+
+    const end = new Date(endDate);
+    const daysRemaining = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+
+    // Only include contracts ending in future within 180 days
+    if (daysRemaining < 0 || daysRemaining > 180) continue;
+
+    recompetes.push({
+      award_id:       String(r['Award ID'] || ''),
+      naics_code:     naicsCode,
+      title:          (r['Description'] || '').substring(0, 500),
+      agency:         r['awarding_agency_name'] || '',
+      incumbent:      r['Recipient Name'] || '',
+      award_amount:   parseFloat(r['Award Amount'] || 0),
+      start_date:     r['Start Date'] || null,
+      end_date:       endDate,
+      days_remaining: daysRemaining,
+      urgency:        urgencyFromDays(daysRemaining),
+    });
+  }
+
+  return recompetes;
+}
+
+// GET recompetes — reads from cache, auto-refreshes if stale
+router.get('/recompetes', async (req, res) => {
+  try {
+    const { data: cached, error: fetchErr } = await supabase
+      .from('recompetes')
+      .select('*')
+      .gte('last_updated', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+      .order('days_remaining', { ascending: true });
+
+    if (fetchErr) throw fetchErr;
+
+    if (cached && cached.length > 0) {
+      // Recalculate days_remaining on every read (cached dates go stale)
+      const now = new Date();
+      const refreshed = cached.map(r => {
+        const days = Math.ceil((new Date(r.end_date) - now) / (1000 * 60 * 60 * 24));
+        return { ...r, days_remaining: days, urgency: urgencyFromDays(days) };
+      }).filter(r => r.days_remaining >= 0 && r.days_remaining <= 180);
+      return res.json(refreshed.sort((a, b) => a.days_remaining - b.days_remaining));
+    }
+
+    // Cache miss — fetch from USASpending for all NAICS
+    const allRecompetes = [];
+    for (const naics of Object.keys(NAICS_MAP)) {
+      const results = await fetchRecompetesForNaics(naics);
+      allRecompetes.push(...results);
+    }
+
+    // Clear old entries, insert fresh
+    await supabase.from('recompetes').delete().gte('id', 0);
+
+    if (allRecompetes.length > 0) {
+      // Deduplicate by award_id
+      const seen = new Set();
+      const deduped = allRecompetes.filter(r => {
+        if (seen.has(r.award_id)) return false;
+        seen.add(r.award_id);
+        return true;
+      });
+
+      // Insert in batches
+      const BATCH = 50;
+      for (let i = 0; i < deduped.length; i += BATCH) {
+        await supabase.from('recompetes').insert(deduped.slice(i, i + BATCH));
+      }
+    }
+
+    res.json(allRecompetes.sort((a, b) => a.days_remaining - b.days_remaining));
+  } catch (err) {
+    console.error('Recompete fetch error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Force refresh recompetes
+router.post('/recompetes/refresh', async (req, res) => {
+  try {
+    const allRecompetes = [];
+    for (const naics of Object.keys(NAICS_MAP)) {
+      const results = await fetchRecompetesForNaics(naics);
+      allRecompetes.push(...results);
+    }
+
+    await supabase.from('recompetes').delete().gte('id', 0);
+
+    if (allRecompetes.length > 0) {
+      const seen = new Set();
+      const deduped = allRecompetes.filter(r => {
+        if (seen.has(r.award_id)) return false;
+        seen.add(r.award_id);
+        return true;
+      });
+      const BATCH = 50;
+      for (let i = 0; i < deduped.length; i += BATCH) {
+        await supabase.from('recompetes').insert(deduped.slice(i, i + BATCH));
+      }
+    }
+
+    res.json({
+      success: true,
+      total: allRecompetes.length,
+      by_urgency: allRecompetes.reduce((acc, r) => {
+        acc[r.urgency] = (acc[r.urgency] || 0) + 1;
+        return acc;
+      }, {}),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── AGENCY RELATIONSHIP TRACKER ─────────────────────────────────────────────
+
+router.get('/agencies', async (req, res) => {
+  try {
+    const { data: pipeline, error } = await supabase
+      .from('pipeline')
+      .select('*');
+    if (error) throw error;
+
+    const items = pipeline || [];
+    const agencyMap = {};
+
+    for (const item of items) {
+      const agency = (item.agency || 'Unknown Agency').trim();
+      if (!agencyMap[agency]) {
+        agencyMap[agency] = {
+          agency,
+          bids: 0,
+          wins: 0,
+          losses: 0,
+          active: 0,
+          submitted: 0,
+          total_bid_value: 0,
+          total_won: 0,
+        };
+      }
+      const a = agencyMap[agency];
+      a.bids++;
+      const proposedPrice = parseFloat(item.proposed_price || 0);
+      const awardAmount   = parseFloat(item.award_amount || 0);
+
+      if (item.status === 'awarded') {
+        a.wins++;
+        a.total_won += awardAmount || proposedPrice;
+      } else if (item.status === 'lost') {
+        a.losses++;
+      } else if (item.status === 'submitted') {
+        a.submitted++;
+        a.total_bid_value += proposedPrice;
+      } else {
+        a.active++;
+        a.total_bid_value += proposedPrice;
+      }
+    }
+
+    const agencies = Object.values(agencyMap)
+      .map(a => ({
+        ...a,
+        win_rate: a.bids > 0 ? Math.round((a.wins / a.bids) * 100) : 0,
+        avg_win_amount: a.wins > 0 ? a.total_won / a.wins : 0,
+        tier: a.wins >= 3 && (a.wins / a.bids) >= 0.3 ? 'strong' :
+              a.wins >= 1 ? 'building' :
+              a.bids >= 3 ? 'struggling' : 'new',
+      }))
+      .sort((a, b) => b.total_won - a.total_won || b.bids - a.bids);
+
+    const summary = {
+      total_agencies: agencies.length,
+      strong_relationships: agencies.filter(a => a.tier === 'strong').length,
+      building: agencies.filter(a => a.tier === 'building').length,
+      struggling: agencies.filter(a => a.tier === 'struggling').length,
+    };
+
+    res.json({ agencies, summary });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
