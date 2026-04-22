@@ -57,3 +57,7 @@ table { border-collapse: collapse; width: 100%; }
   background-size: 1000px 100%;
   animation: shimmer 1.5s infinite;
 }
+/* Safe area for iPhone home bar */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 8px);
+}
