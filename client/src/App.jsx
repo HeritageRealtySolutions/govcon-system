@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom';
+import logoImg from '../IMG_1447-removebg-preview.PNG';
 import Dashboard from './pages/Dashboard';
 import Opportunities from './pages/Opportunities';
 import Municipal from './pages/Municipal';
@@ -97,10 +98,9 @@ function Login({ onLogin }) {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="w-20 h-20 bg-black rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-xl">
-            <img src="/logo.png" alt="Lumen Capital" className="w-14 h-14 object-contain" />
+            <img src={logoImg} alt="Lumen Capital" className="w-14 h-14 object-contain" />
           </div>
           <h1 className="text-gray-900 text-2xl font-bold tracking-tight">Lumen Bid Intelligence</h1>
           <p className="text-gray-500 text-sm mt-1.5">Sign in to your account</p>
@@ -146,10 +146,9 @@ function Sidebar({ user, onLogout, collapsed, setCollapsed }) {
 
   return (
     <aside className={`${collapsed ? 'w-16' : 'w-60'} flex-shrink-0 bg-black flex flex-col transition-all duration-200 sticky top-0 h-screen z-30`}>
-      {/* Logo */}
       <div className={`flex items-center h-16 border-b border-white/10 px-4 ${collapsed ? 'justify-center' : 'gap-3'}`}>
         <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
-          <img src="/logo.png" alt="Lumen Capital" className="w-7 h-7 object-contain" />
+          <img src={logoImg} alt="Lumen Capital" className="w-7 h-7 object-contain" />
         </div>
         {!collapsed && (
           <div className="min-w-0">
@@ -159,7 +158,6 @@ function Sidebar({ user, onLogout, collapsed, setCollapsed }) {
         )}
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 px-2 py-3 overflow-y-auto space-y-4">
         {NAV_SECTIONS.map(section => (
           <div key={section.label}>
@@ -187,7 +185,6 @@ function Sidebar({ user, onLogout, collapsed, setCollapsed }) {
         ))}
       </nav>
 
-      {/* User + collapse */}
       <div className="border-t border-white/10 p-3 space-y-2">
         {!collapsed && user && (
           <div className="bg-white/5 rounded-lg px-3 py-2">
@@ -231,7 +228,6 @@ function AppLayout({ user, onLogout }) {
       <Sidebar user={user} onLogout={onLogout} collapsed={collapsed} setCollapsed={setCollapsed} />
 
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top header */}
         <header className="h-16 bg-white border-b border-gray-200 flex items-center px-6 gap-4 sticky top-0 z-20">
           <div className="flex-1 min-w-0">
             <h1 className="text-gray-900 font-semibold text-base leading-tight">{currentLabel}</h1>
@@ -245,7 +241,6 @@ function AppLayout({ user, onLogout }) {
           </div>
         </header>
 
-        {/* Content */}
         <main className="flex-1 p-6 overflow-auto animate-fade-in">
           <Routes>
             <Route path="/"              element={<Dashboard />} />
@@ -286,7 +281,7 @@ function AppInner() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 bg-black rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl">
-            <img src="/logo.png" alt="Lumen Capital" className="w-11 h-11 object-contain" />
+            <img src={logoImg} alt="Lumen Capital" className="w-11 h-11 object-contain" />
           </div>
           <div className="w-5 h-5 border-2 border-gray-200 border-t-gray-900 rounded-full animate-spin mx-auto" />
         </div>
