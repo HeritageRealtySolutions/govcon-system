@@ -1,226 +1,208 @@
-const express = require('express');
-const router = express.Router();
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
-const axios = require('axios');
+const express  = require('express');
+const router   = express.Router();
+const multer   = require('multer');
+const axios    = require('axios');
+const path     = require('path');
 const { supabase } = require('../db');
 
-// Use memory storage — files go to Supabase Storage, not local disk
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowed = ['.pdf', '.png', '.jpg', '.jpeg'];
-    cb(null, allowed.includes(path.extname(file.originalname).toLowerCase()));
-  }
-});
+const storage = multer.memoryStorage();
+const upload  = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
-const NAICS_MAP = {
-  'electrical': '238210', 'electric': '238210',
-  'plumbing': '238220', 'hvac': '238220',
-  'roofing': '238160', 'roof': '238160',
-  'landscaping': '561730', 'grounds': '561730',
-  'construction': '236220', 'renovation': '236220',
+const NAICS_KEYWORDS = {
+  '238210': ['electrical','wiring','power','lighting','circuit'],
+  '238220': ['plumbing','hvac','mechanical','heating','cooling','piping'],
+  '238160': ['roofing','roof','shingles','membrane','waterproof'],
+  '561730': ['landscaping','grounds','lawn','mowing','irrigation','turf'],
+  '236220': ['construction','renovation','building','facility','retrofit'],
 };
 
 function guessNaics(text) {
-  const lower = (text || '').toLowerCase();
-  for (const [kw, code] of Object.entries(NAICS_MAP)) {
-    if (lower.includes(kw)) return code;
+  const lower = text.toLowerCase();
+  let best = '236220', bestCount = 0;
+  for (const [code, words] of Object.entries(NAICS_KEYWORDS)) {
+    const count = words.filter(w => lower.includes(w)).length;
+    if (count > bestCount) { bestCount = count; best = code; }
   }
-  return '236220';
+  return best;
 }
 
-function calcBidScore(bid) {
-  let score = 0;
-  const deadline = bid.response_deadline ? new Date(bid.response_deadline) : null;
-  if (deadline) {
-    const days = (deadline - new Date()) / 86400000;
-    if (days > 14) score += 20;
-    else if (days >= 7) score += 10;
-  }
-  const val = parseFloat(bid.estimated_value || 0);
-  if (val >= 100000 && val <= 2000000) score += 20;
-  else if (val > 0) score += 5;
-  if (bid.naics_code === '238210') score += 20;
-  else if (bid.naics_code) score += 10;
-  score += 25;
-  return Math.min(score, 100);
-}
-
-const EXTRACT_PROMPT = `You are a government contracting analyst. Extract structured bid information from the provided content.
-Return ONLY valid JSON with these fields (null for missing):
+const EXTRACT_PROMPT = `Extract government bid/contract information from the following content and return ONLY a valid JSON object with these exact fields. No markdown, no preamble, just the JSON:
 {
-  "title": "full bid title",
-  "agency": "issuing organization",
-  "city": "city and state",
-  "bid_number": "RFP/IFB number or null",
-  "posted_date": "YYYY-MM-DD or null",
-  "response_deadline": "YYYY-MM-DD or null",
-  "estimated_value": numeric amount or null,
-  "description": "full scope of work",
-  "contact_name": "contact person or null",
-  "contact_email": "email or null",
-  "naics_code": "238210 electrical, 238220 plumbing/HVAC, 238160 roofing, 561730 landscaping, 236220 construction"
-}
-Return ONLY the JSON object.`;
+  "title": "bid title or project name",
+  "agency": "issuing government agency or entity",
+  "naics_code": "most appropriate NAICS code from: 238210, 238220, 238160, 561730, 236220",
+  "bid_number": "solicitation or bid number if present",
+  "response_deadline": "deadline in YYYY-MM-DD format or empty string",
+  "estimated_value": numeric dollar amount or 0,
+  "description": "scope of work summary, 2-3 sentences",
+  "contact_name": "contracting officer name or empty string",
+  "contact_email": "contact email or empty string",
+  "source_url": "source URL if known or empty string",
+  "notes": "any important requirements or notes"
+}`;
 
-async function extractWithAI(content) {
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const message = await client.messages.create({
-    model: 'claude-opus-4-6',
-    max_tokens: 1024,
-    messages: [{ role: 'user', content: `${EXTRACT_PROMPT}\n\nCONTENT:\n${content}` }]
-  });
-  const text  = message.content[0].text.trim();
-  const clean = text.replace(/```json|```/g, '').trim();
+async function extractWithGemini(content) {
+  if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not configured');
+
+  const response = await axios.post(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      contents: [{ role: 'user', parts: [{ text: `${EXTRACT_PROMPT}\n\nCONTENT:\n${content.substring(0, 8000)}` }] }],
+      generationConfig: { maxOutputTokens: 1024, temperature: 0.2 },
+    },
+    { timeout: 30000 }
+  );
+
+  const text   = response.data.candidates[0].content.parts[0].text.trim();
+  const clean  = text.replace(/```json|```/g, '').trim();
   const parsed = JSON.parse(clean);
   if (!parsed.naics_code) parsed.naics_code = guessNaics(parsed.description || parsed.title || '');
   return parsed;
 }
 
-// GET all
+async function extractWithGeminiVision(base64Data, mimeType) {
+  if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not configured');
+
+  const response = await axios.post(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      contents: [{ role: 'user', parts: [
+        { inline_data: { mime_type: mimeType, data: base64Data } },
+        { text: EXTRACT_PROMPT }
+      ]}],
+      generationConfig: { maxOutputTokens: 1024, temperature: 0.2 },
+    },
+    { timeout: 30000 }
+  );
+
+  const text   = response.data.candidates[0].content.parts[0].text.trim();
+  const clean  = text.replace(/```json|```/g, '').trim();
+  const parsed = JSON.parse(clean);
+  if (!parsed.naics_code) parsed.naics_code = guessNaics(parsed.description || '');
+  return parsed;
+}
+
+// GET all municipal bids
 router.get('/', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('municipal_bids')
       .select('*')
-      .order('response_deadline', { ascending: true });
+      .order('created_at', { ascending: false });
     if (error) throw error;
     res.json(data || []);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// AI Extract from URL or text
+// POST extract from URL or text
 router.post('/extract', async (req, res) => {
-  const { source, type } = req.body;
-  if (!source?.trim()) return res.status(400).json({ error: 'No source provided' });
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: 'Anthropic API key not configured' });
-  }
   try {
-    let content = source;
-    if (type === 'url') {
-      const response = await axios.get(source, {
-        timeout: 15000,
-        headers: { 'User-Agent': 'Mozilla/5.0' }
-      });
-      content = response.data
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .substring(0, 8000);
+    const { url, text } = req.body;
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(400).json({ error: 'Gemini API key not configured. Add GEMINI_API_KEY to Railway Variables.' });
     }
-    const extracted = await extractWithAI(content);
-    res.json({ extracted });
+
+    let content = '';
+    if (url) {
+      const r = await axios.get(url, { timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+      content = r.data.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    } else if (text) {
+      content = text;
+    } else {
+      return res.status(400).json({ error: 'URL or text required' });
+    }
+
+    const extracted = await extractWithGemini(content);
+    res.json(extracted);
   } catch (err) {
+    console.error('Extract error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// Save bid
-router.post('/', async (req, res) => {
-  try {
-    const b = req.body;
-    const score = calcBidScore(b);
-    const { data, error } = await supabase.from('municipal_bids').insert({
-      title: b.title, agency: b.agency, state: b.state || 'MS',
-      city: b.city, naics_code: b.naics_code, posted_date: b.posted_date || null,
-      response_deadline: b.response_deadline || null, estimated_value: b.estimated_value || null,
-      description: b.description, contact_email: b.contact_email,
-      contact_name: b.contact_name, bid_number: b.bid_number,
-      bid_score: score, status: 'identified',
-    }).select().single();
-    if (error) throw error;
-    res.json({ id: data.id, bid_score: score });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Upload file — store in Supabase Storage
+// POST upload PDF or image
 router.post('/upload', upload.single('file'), async (req, res) => {
   try {
-    let filePath = null;
-
-    if (req.file) {
-      const fileName = `${Date.now()}-${req.file.originalname}`;
-      const { error: uploadError } = await supabase.storage
-        .from('bid-documents')
-        .upload(fileName, req.file.buffer, {
-          contentType: req.file.mimetype,
-          upsert: false,
-        });
-      if (!uploadError) filePath = fileName;
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(400).json({ error: 'Gemini API key not configured' });
     }
 
-    // Try AI extraction on images
-    if (process.env.ANTHROPIC_API_KEY && req.file) {
-      const ext = path.extname(req.file.originalname).toLowerCase();
-      if (['.png', '.jpg', '.jpeg'].includes(ext)) {
-        try {
-          const { default: Anthropic } = await import('@anthropic-ai/sdk');
-          const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-          const mediaType = ext === '.png' ? 'image/png' : 'image/jpeg';
-          const message = await client.messages.create({
-            model: 'claude-opus-4-6',
-            max_tokens: 1024,
-            messages: [{
-              role: 'user',
-              content: [
-                { type: 'image', source: { type: 'base64', media_type: mediaType, data: req.file.buffer.toString('base64') } },
-                { type: 'text', text: EXTRACT_PROMPT }
-              ]
-            }]
-          });
-          const text = message.content[0].text.trim().replace(/```json|```/g, '').trim();
-          const extracted = JSON.parse(text);
-          if (!extracted.naics_code) extracted.naics_code = guessNaics(extracted.description || '');
-          return res.json({ extracted, file: filePath });
-        } catch (aiErr) {
-          console.error('Image AI extraction failed:', aiErr.message);
-        }
-      }
-    }
+    const ext      = path.extname(req.file.originalname).toLowerCase();
+    const base64   = req.file.buffer.toString('base64');
+    let mimeType   = 'image/jpeg';
+    if (ext === '.png') mimeType = 'image/png';
+    else if (ext === '.pdf') mimeType = 'application/pdf';
 
-    const b = req.body;
-    const score = calcBidScore(b);
-    const { data, error } = await supabase.from('municipal_bids').insert({
-      title: b.title || req.file?.originalname || 'Uploaded Bid',
-      agency: b.agency, state: b.state || 'MS', city: b.city,
-      naics_code: b.naics_code || '236220', file_path: filePath,
-      bid_score: score, status: 'identified',
-    }).select().single();
-    if (error) throw error;
-    res.json({ id: data.id, file: filePath, bid_score: score });
+    // Upload to Supabase Storage
+    const fileName = `bids/${Date.now()}-${req.file.originalname}`;
+    const { data: fileData, error: uploadError } = await supabase.storage
+      .from('bid-documents')
+      .upload(fileName, req.file.buffer, { contentType: req.file.mimetype, upsert: false });
+
+    if (uploadError) console.error('Storage upload error:', uploadError.message);
+    const filePath = fileData?.path || fileName;
+
+    // Extract with Gemini Vision
+    const extracted = await extractWithGeminiVision(base64, mimeType);
+    res.json({ ...extracted, file: filePath });
   } catch (err) {
+    console.error('Upload error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
+// POST save bid
+router.post('/', async (req, res) => {
+  try {
+    const {
+      title, agency, naics_code, bid_number, response_deadline,
+      estimated_value, description, contact_name, contact_email,
+      source_url, notes, file
+    } = req.body;
+
+    if (!title?.trim()) return res.status(400).json({ error: 'Title is required' });
+
+    const { data, error } = await supabase.from('municipal_bids').insert({
+      title:              title.trim(),
+      agency:             agency || null,
+      naics_code:         naics_code || '236220',
+      bid_number:         bid_number || null,
+      response_deadline:  response_deadline || null,
+      estimated_value:    parseFloat(estimated_value) || null,
+      description:        description || null,
+      contact_name:       contact_name || null,
+      contact_email:      contact_email || null,
+      source_url:         source_url || null,
+      notes:              notes || null,
+      document_path:      file || null,
+      status:             'new',
+    }).select().single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PATCH update bid
 router.patch('/:id', async (req, res) => {
   try {
-    const { error } = await supabase.from('municipal_bids').update(req.body).eq('id', req.params.id);
+    const { error } = await supabase
+      .from('municipal_bids')
+      .update({ ...req.body, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id);
     if (error) throw error;
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// DELETE bid
 router.delete('/:id', async (req, res) => {
   try {
     const { error } = await supabase.from('municipal_bids').delete().eq('id', req.params.id);
     if (error) throw error;
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;
