@@ -13,6 +13,8 @@ import ROITracker from './pages/ROITracker';
 import Recompetes from './pages/Recompetes';
 import AgencyTracker from './pages/AgencyTracker';
 import { getToken, clearToken, BASE_URL } from './utils/api';
+import SLEDBids from './pages/SLEDBids';
+import ComplianceChecker from './pages/ComplianceChecker';
 
 const NAV_SECTIONS = [
   {
