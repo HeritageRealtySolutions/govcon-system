@@ -55,14 +55,17 @@ async function fetchOpportunities() {
   const dd   = String(thirtyDaysAgo.getDate()).padStart(2, '0');
   const yyyy = thirtyDaysAgo.getFullYear();
 
-  const params = new URLSearchParams({
-    api_key:       process.env.SAM_API_KEY,
-    naicsCode:     NAICS_CODES.join(','),
-    typeOfSetAside: SET_ASIDES.join(','),
-    limit:         '100',
-    postedFrom:    `${mm}/${dd}/${yyyy}`,
-    ptype:         'o',
-  });
+ const params = new URLSearchParams({
+  api_key:   process.env.SAM_API_KEY,
+  naicsCode: NAICS_CODES.join(','),
+  limit:     '100',
+  postedFrom,
+  ptype:     'o',
+});
+// SAM.gov v2 requires set-aside as separate params
+for (const sa of SET_ASIDES) {
+  params.append('typeOfSetAside', sa);
+}
 
   const url = `https://api.sam.gov/opportunities/v2/search?${params}`;
   console.log('[SAM.gov] GET', url.replace(process.env.SAM_API_KEY, '***'));
