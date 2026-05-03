@@ -60,8 +60,10 @@ function buildParams(postedFrom, postedTo) {
     postedFrom,
     postedTo,
     ptype:     'o',
-    naicsCode: NAICS_CODES.join(','),
   });
+  for (const code of NAICS_CODES) {
+    params.append('naicsCode', code);
+  }
   for (const sa of SET_ASIDES) {
     params.append('typeOfSetAside', sa);
   }
@@ -92,7 +94,7 @@ async function fetchOpportunities() {
     throw new Error(`SAM.gov ${status}: ${detail}`);
   }
 
-  console.log('[SAM.gov] Response status:', response.status);
+  console.log('[SAM.gov] totalRecords:', response.data?.totalRecords, 'items:', (response.data?.opportunitiesData || []).length);
   return (response.data?.opportunitiesData || []).map(parseOpportunity);
 }
 
@@ -120,9 +122,8 @@ async function syncSAMOpportunities() {
     throw new Error(`SAM.gov API error ${status}: ${detail}`);
   }
 
-  console.log('[SAM.gov] Response status:', response.status);
   const items = response.data?.opportunitiesData || [];
-  console.log('[SAM.gov] Total returned:', response.data?.totalRecords, '| Items in page:', items.length);
+  console.log('[SAM.gov] totalRecords:', response.data?.totalRecords, 'items:', items.length);
 
   let saved = 0;
   for (const item of items) {
