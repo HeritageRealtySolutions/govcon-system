@@ -57,12 +57,11 @@ async function syncSAMOpportunities() {
   const postedFrom = `${mm}/${dd}/${yyyy}`;
 
   const params = new URLSearchParams({
-    api_key:   process.env.SAM_API_KEY,
-    naicsCode: NAICS_CODES.join(','),
-    limit:     '100',
-    postedFrom,
-    ptype:     'o',
-  });
+  api_key:    process.env.SAM_API_KEY,
+  postedFrom,
+  limit:      '25',
+  ptype:      'o',
+});
 
   for (const sa of SET_ASIDES) {
     params.append('typeOfSetAside', sa);
