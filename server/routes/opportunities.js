@@ -1,5 +1,5 @@
 const express = require('express');
-const router = express.Router();
+const router  = express.Router();
 const { supabase } = require('../db');
 const { fetchOpportunities } = require('../services/samGov');
 
@@ -26,7 +26,10 @@ function calcBidScore(opp) {
 // GET all opportunities
 router.get('/', async (req, res) => {
   try {
-    let query = supabase.from('opportunities').select('*').order('response_deadline', { ascending: true });
+    let query = supabase
+      .from('opportunities')
+      .select('*')
+      .order('response_deadline', { ascending: true });
     if (req.query.naics)     query = query.eq('naics_code', req.query.naics);
     if (req.query.set_aside) query = query.eq('set_aside_type', req.query.set_aside);
     if (req.query.min_score) query = query.gte('bid_score', parseInt(req.query.min_score));
@@ -41,14 +44,16 @@ router.get('/', async (req, res) => {
 // GET stats
 router.get('/stats', async (req, res) => {
   try {
-    const { data, error } = await supabase.from('opportunities').select('status, bid_score');
+    const { data, error } = await supabase
+      .from('opportunities')
+      .select('status, bid_score');
     if (error) throw error;
-    const counts = [];
+
     const statusMap = {};
     (data || []).forEach(o => {
       statusMap[o.status] = (statusMap[o.status] || 0) + 1;
     });
-    Object.entries(statusMap).forEach(([status, count]) => counts.push({ status, count }));
+    const counts    = Object.entries(statusMap).map(([status, count]) => ({ status, count }));
     const hot_leads = (data || []).filter(o => o.bid_score >= 70).length;
     res.json({ counts, hot_leads });
   } catch (err) {
@@ -56,14 +61,16 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// POST sync from SAM.gov
+// GET sync from SAM.gov
 router.get('/sync', async (req, res) => {
   try {
     if (!process.env.SAM_API_KEY) {
       return res.json({ saved: 0, total: 0, error: 'SAM_API_KEY not configured' });
     }
+
     const opportunities = await fetchOpportunities();
     let saved = 0;
+
     for (const opp of opportunities) {
       const score = calcBidScore(opp);
       const { error } = await supabase.from('opportunities').upsert({
@@ -87,8 +94,10 @@ router.get('/sync', async (req, res) => {
       }, { onConflict: 'notice_id' });
       if (!error) saved++;
     }
+
     res.json({ saved, total: opportunities.length });
   } catch (err) {
+    console.error('Sync error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
