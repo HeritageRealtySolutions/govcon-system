@@ -115,6 +115,8 @@ async function fetchOpportunities() {
   for (const sa of SET_ASIDES) params.append('typeOfSetAside', sa);
 
   const url      = `https://api.sam.gov/opportunities/v2/search?${params}`;
+  console.log('[SAM.gov] postedFrom:', postedFrom);
+console.log('[SAM.gov] Full URL:', url.replace(process.env.SAM_API_KEY, '***'));
   const response = await axios.get(url, { timeout: 30000 });
   return (response.data?.opportunitiesData || []).map(parseOpportunity);
 }
