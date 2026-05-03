@@ -122,6 +122,7 @@ async function syncSAMOpportunities() {
 
   console.log('[SAM.gov] Response status:', response.status);
   const items = response.data?.opportunitiesData || [];
+  console.log('[SAM.gov] Total returned:', response.data?.totalRecords, '| Items in page:', items.length);
 
   let saved = 0;
   for (const item of items) {
