@@ -46,28 +46,32 @@ function parseOpportunity(item) {
   };
 }
 
-async function syncSAMOpportunities() {
+function buildParams(postedFrom) {
+  const params = new URLSearchParams({
+    api_key:   process.env.SAM_API_KEY,
+    limit:     '100',
+    postedFrom,
+    ptype:     'o',
+  });
+  for (const sa of SET_ASIDES) {
+    params.append('typeOfSetAside', sa);
+  }
+  return params;
+}
+
+async function fetchOpportunities() {
   if (!process.env.SAM_API_KEY) throw new Error('SAM_API_KEY not set');
 
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const mm       = String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0');
-  const dd       = String(thirtyDaysAgo.getDate()).padStart(2, '0');
-  const yyyy     = thirtyDaysAgo.getFullYear();
+  const mm         = String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0');
+  const dd         = String(thirtyDaysAgo.getDate()).padStart(2, '0');
+  const yyyy       = thirtyDaysAgo.getFullYear();
   const postedFrom = `${mm}/${dd}/${yyyy}`;
 
-  const params = new URLSearchParams({
-  api_key:    process.env.SAM_API_KEY,
-  postedFrom,
-  limit:      '25',
-  ptype:      'o',
-});
+  const params = buildParams(postedFrom);
+  const url    = `https://api.sam.gov/opportunities/v2/search?${params}`;
 
-  for (const sa of SET_ASIDES) {
-    params.append('typeOfSetAside', sa);
-  }
-
-  const url = `https://api.sam.gov/opportunities/v2/search?${params}`;
   console.log('[SAM.gov] GET', url.replace(process.env.SAM_API_KEY, '***'));
 
   let response;
@@ -75,7 +79,36 @@ async function syncSAMOpportunities() {
     response = await axios.get(url, { timeout: 30000 });
   } catch (err) {
     const status = err.response?.status;
-    const detail = JSON.stringify(err.response?.data ?? err.message);
+    const detail = JSON.stringify(err.response?.data || err.message);
+    console.error(`[SAM.gov] ${status} error:`, detail);
+    throw new Error(`SAM.gov ${status}: ${detail}`);
+  }
+
+  console.log('[SAM.gov] Response status:', response.status);
+  return (response.data?.opportunitiesData || []).map(parseOpportunity);
+}
+
+async function syncSAMOpportunities() {
+  if (!process.env.SAM_API_KEY) throw new Error('SAM_API_KEY not set');
+
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const mm         = String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0');
+  const dd         = String(thirtyDaysAgo.getDate()).padStart(2, '0');
+  const yyyy       = thirtyDaysAgo.getFullYear();
+  const postedFrom = `${mm}/${dd}/${yyyy}`;
+
+  const params = buildParams(postedFrom);
+  const url    = `https://api.sam.gov/opportunities/v2/search?${params}`;
+
+  console.log('[SAM.gov] Sync GET', url.replace(process.env.SAM_API_KEY, '***'));
+
+  let response;
+  try {
+    response = await axios.get(url, { timeout: 30000 });
+  } catch (err) {
+    const status = err.response?.status;
+    const detail = JSON.stringify(err.response?.data || err.message);
     console.error(`[SAM.gov] ${status} error:`, detail);
     throw new Error(`SAM.gov API error ${status}: ${detail}`);
   }
@@ -95,37 +128,5 @@ async function syncSAMOpportunities() {
 
   return { total: items.length, saved };
 }
-async function fetchOpportunities() {
-  if (!process.env.SAM_API_KEY) throw new Error('SAM_API_KEY not set');
-
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const mm       = String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0');
-  const dd       = String(thirtyDaysAgo.getDate()).padStart(2, '0');
-  const yyyy     = thirtyDaysAgo.getFullYear();
-  const postedFrom = `${mm}/${dd}/${yyyy}`;
-
-  const params = new URLSearchParams({
-    api_key:   process.env.SAM_API_KEY,
-    naicsCode: NAICS_CODES.join(','),
-    limit:     '100',
-    postedFrom,
-    ptype:     'o',
-  });
-  for (const sa of SET_ASIDES) params.append('typeOfSetAside', sa);
-
-  const url      = `https://api.sam.gov/opportunities/v2/search?${params}`;
-  console.log('[SAM.gov] postedFrom:', postedFrom);
-console.log('[SAM.gov] Full URL:', url.replace(process.env.SAM_API_KEY, '***'));
-  let response;
-try {
-  response = await axios.get(url, { timeout: 30000 });
-} catch (err) {
-  const status = err.response?.status;
-  const detail = JSON.stringify(err.response?.data || err.message);
-  console.error(`[SAM.gov] ${status} error body:`, detail);
-  throw new Error(`SAM.gov ${status}: ${detail}`);
-}
-return (response.data?.opportunitiesData || []).map(parseOpportunity);
 
 module.exports = { syncSAMOpportunities, fetchOpportunities };
