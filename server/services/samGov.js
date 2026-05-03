@@ -121,4 +121,3 @@ async function fetchOpportunities() {
 }
 
 module.exports = { syncSAMOpportunities, fetchOpportunities };
-module.exports = { syncSAMOpportunities };
