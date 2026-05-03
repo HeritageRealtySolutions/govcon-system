@@ -96,5 +96,29 @@ async function syncSAMOpportunities() {
 
   return { total: items.length, saved };
 }
+async function fetchOpportunities() {
+  if (!process.env.SAM_API_KEY) throw new Error('SAM_API_KEY not set');
 
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const mm       = String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0');
+  const dd       = String(thirtyDaysAgo.getDate()).padStart(2, '0');
+  const yyyy     = thirtyDaysAgo.getFullYear();
+  const postedFrom = `${mm}/${dd}/${yyyy}`;
+
+  const params = new URLSearchParams({
+    api_key:   process.env.SAM_API_KEY,
+    naicsCode: NAICS_CODES.join(','),
+    limit:     '100',
+    postedFrom,
+    ptype:     'o',
+  });
+  for (const sa of SET_ASIDES) params.append('typeOfSetAside', sa);
+
+  const url      = `https://api.sam.gov/opportunities/v2/search?${params}`;
+  const response = await axios.get(url, { timeout: 30000 });
+  return (response.data?.opportunitiesData || []).map(parseOpportunity);
+}
+
+module.exports = { syncSAMOpportunities, fetchOpportunities };
 module.exports = { syncSAMOpportunities };
