@@ -117,8 +117,15 @@ async function fetchOpportunities() {
   const url      = `https://api.sam.gov/opportunities/v2/search?${params}`;
   console.log('[SAM.gov] postedFrom:', postedFrom);
 console.log('[SAM.gov] Full URL:', url.replace(process.env.SAM_API_KEY, '***'));
-  const response = await axios.get(url, { timeout: 30000 });
-  return (response.data?.opportunitiesData || []).map(parseOpportunity);
+  let response;
+try {
+  response = await axios.get(url, { timeout: 30000 });
+} catch (err) {
+  const status = err.response?.status;
+  const detail = JSON.stringify(err.response?.data || err.message);
+  console.error(`[SAM.gov] ${status} error body:`, detail);
+  throw new Error(`SAM.gov ${status}: ${detail}`);
 }
+return (response.data?.opportunitiesData || []).map(parseOpportunity);
 
 module.exports = { syncSAMOpportunities, fetchOpportunities };
