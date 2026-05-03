@@ -46,12 +46,20 @@ function parseOpportunity(item) {
   };
 }
 
-function buildParams(postedFrom) {
+function formatDate(date) {
+  const mm   = String(date.getMonth() + 1).padStart(2, '0');
+  const dd   = String(date.getDate()).padStart(2, '0');
+  const yyyy = date.getFullYear();
+  return `${mm}/${dd}/${yyyy}`;
+}
+
+function buildParams(postedFrom, postedTo) {
   const params = new URLSearchParams({
-    api_key:   process.env.SAM_API_KEY,
-    limit:     '100',
+    api_key:    process.env.SAM_API_KEY,
+    limit:      '100',
     postedFrom,
-    ptype:     'o',
+    postedTo,
+    ptype:      'o',
   });
   for (const sa of SET_ASIDES) {
     params.append('typeOfSetAside', sa);
@@ -62,15 +70,14 @@ function buildParams(postedFrom) {
 async function fetchOpportunities() {
   if (!process.env.SAM_API_KEY) throw new Error('SAM_API_KEY not set');
 
+  const today        = new Date();
   const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const mm         = String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0');
-  const dd         = String(thirtyDaysAgo.getDate()).padStart(2, '0');
-  const yyyy       = thirtyDaysAgo.getFullYear();
-  const postedFrom = `${mm}/${dd}/${yyyy}`;
+  thirtyDaysAgo.setDate(today.getDate() - 30);
 
-  const params = buildParams(postedFrom);
-  const url    = `https://api.sam.gov/opportunities/v2/search?${params}`;
+  const postedFrom = formatDate(thirtyDaysAgo);
+  const postedTo   = formatDate(today);
+  const params     = buildParams(postedFrom, postedTo);
+  const url        = `https://api.sam.gov/opportunities/v2/search?${params}`;
 
   console.log('[SAM.gov] GET', url.replace(process.env.SAM_API_KEY, '***'));
 
@@ -91,15 +98,14 @@ async function fetchOpportunities() {
 async function syncSAMOpportunities() {
   if (!process.env.SAM_API_KEY) throw new Error('SAM_API_KEY not set');
 
+  const today        = new Date();
   const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const mm         = String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0');
-  const dd         = String(thirtyDaysAgo.getDate()).padStart(2, '0');
-  const yyyy       = thirtyDaysAgo.getFullYear();
-  const postedFrom = `${mm}/${dd}/${yyyy}`;
+  thirtyDaysAgo.setDate(today.getDate() - 30);
 
-  const params = buildParams(postedFrom);
-  const url    = `https://api.sam.gov/opportunities/v2/search?${params}`;
+  const postedFrom = formatDate(thirtyDaysAgo);
+  const postedTo   = formatDate(today);
+  const params     = buildParams(postedFrom, postedTo);
+  const url        = `https://api.sam.gov/opportunities/v2/search?${params}`;
 
   console.log('[SAM.gov] Sync GET', url.replace(process.env.SAM_API_KEY, '***'));
 
