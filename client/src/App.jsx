@@ -12,9 +12,9 @@ import Intelligence from './pages/Intelligence';
 import ROITracker from './pages/ROITracker';
 import Recompetes from './pages/Recompetes';
 import AgencyTracker from './pages/AgencyTracker';
-import { getToken, clearToken, BASE_URL } from './utils/api';
 import SLEDBids from './pages/SLEDBids';
 import ComplianceChecker from './pages/ComplianceChecker';
+import { getToken, clearToken, BASE_URL } from './utils/api';
 
 const NAV_SECTIONS = [
   {
@@ -25,6 +25,9 @@ const NAV_SECTIONS = [
       )},
       { to: '/opportunities', label: 'Federal Bids', icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+      )},
+      { to: '/sled', label: 'State Bids', icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
       )},
       { to: '/recompetes', label: 'Recompetes', icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -49,10 +52,13 @@ const NAV_SECTIONS = [
       { to: '/intelligence', label: 'Market Intel', icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.347.347a3.75 3.75 0 01-5.303 0l-.347-.347z" /></svg>
       )},
-      { to: '/agencies', label: 'Agencies', icon: (
+      { to: '/compliance', label: 'Compliance', icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+      )},
+      { to: '/agencies', label: 'Agency Tracker', icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
       )},
-      { to: '/roi', label: 'ROI', icon: (
+      { to: '/roi', label: 'ROI Tracker', icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
       )},
     ],
@@ -60,23 +66,22 @@ const NAV_SECTIONS = [
   {
     label: 'Settings',
     items: [
-      { to: '/setup', label: 'Company', icon: (
+      { to: '/setup', label: 'Company Profile', icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
       )},
     ],
   },
 ];
 
-// Bottom nav items for mobile (most important 5)
 const MOBILE_NAV = [
   { to: '/', end: true, label: 'Home', icon: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
   )},
-  { to: '/opportunities', label: 'Bids', icon: (
+  { to: '/opportunities', label: 'Federal', icon: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
   )},
-  { to: '/municipal', label: 'Submit', icon: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+  { to: '/sled', label: 'State', icon: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
   )},
   { to: '/pipeline', label: 'Pipeline', icon: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" /></svg>
@@ -143,7 +148,10 @@ function Login({ onLogin }) {
             {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2.5 rounded-lg">{error}</div>}
             <button type="submit" disabled={loading}
               className="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-black disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition-colors mt-1 text-base">
-              {loading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block"/>Signing in...</> : 'Sign In'}
+              {loading
+                ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block"/>Signing in...</>
+                : 'Sign In'
+              }
             </button>
           </form>
         </div>
@@ -153,20 +161,15 @@ function Login({ onLogin }) {
   );
 }
 
-// Mobile drawer — full screen overlay with all nav items
 function MobileDrawer({ open, onClose, user, onLogout }) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 md:hidden">
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      {/* Drawer */}
       <div className="absolute bottom-0 left-0 right-0 bg-black rounded-t-2xl max-h-[85vh] overflow-y-auto">
-        {/* Handle */}
         <div className="flex justify-center pt-3 pb-2">
           <div className="w-10 h-1 bg-white/20 rounded-full" />
         </div>
-        {/* User info */}
         {user && (
           <div className="mx-4 mb-3 bg-white/5 rounded-xl px-4 py-3">
             <p className="text-gray-400 text-xs">{user?.email}</p>
@@ -177,8 +180,7 @@ function MobileDrawer({ open, onClose, user, onLogout }) {
             </div>
           </div>
         )}
-        {/* Nav sections */}
-        <div className="px-4 pb-4 space-y-4">
+        <div className="px-4 pb-8 space-y-4">
           {NAV_SECTIONS.map(section => (
             <div key={section.label}>
               <p className="text-gray-600 text-[10px] font-bold uppercase tracking-widest px-2 mb-2">{section.label}</p>
@@ -209,7 +211,6 @@ function MobileDrawer({ open, onClose, user, onLogout }) {
   );
 }
 
-// Desktop sidebar
 function Sidebar({ user, onLogout, collapsed, setCollapsed }) {
   return (
     <aside className={`${collapsed ? 'w-16' : 'w-60'} flex-shrink-0 bg-black flex flex-col transition-all duration-200 sticky top-0 h-screen z-30`}>
@@ -280,58 +281,50 @@ function AppLayout({ user, onLogout }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
 
-  const allItems = NAV_SECTIONS.flatMap(s => s.items);
+  const allItems    = NAV_SECTIONS.flatMap(s => s.items);
   const currentLabel = allItems.find(n =>
     n.end ? location.pathname === n.to : location.pathname.startsWith(n.to)
   )?.label ?? 'Dashboard';
 
-  // Close drawer on route change
   useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      {/* Desktop sidebar — hidden on mobile */}
       <div className="hidden md:flex">
         <Sidebar user={user} onLogout={onLogout} collapsed={collapsed} setCollapsed={setCollapsed} />
       </div>
 
-      {/* Mobile drawer */}
       <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} user={user} onLogout={onLogout} />
 
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
         <header className="h-14 md:h-16 bg-white border-b border-gray-200 flex items-center px-4 md:px-6 gap-3 sticky top-0 z-20">
-          {/* Mobile logo + menu button */}
           <div className="flex items-center gap-3 md:hidden">
             <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center flex-shrink-0">
               <img src={logoImg} alt="Lumen" className="w-6 h-6 object-contain" />
             </div>
           </div>
-
           <div className="flex-1 min-w-0">
             <h1 className="text-gray-900 font-semibold text-sm md:text-base leading-tight truncate">{currentLabel}</h1>
             <p className="text-gray-400 text-xs mt-0.5 hidden sm:block">Lumen Capital LLC · Government Contracting System</p>
           </div>
-
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 text-emerald-700 bg-emerald-50 border border-emerald-200 text-xs font-semibold px-2 py-1 rounded-full">
-              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"/>
-              <span className="hidden sm:inline">Live</span>
-            </span>
-          </div>
+          <span className="inline-flex items-center gap-1.5 text-emerald-700 bg-emerald-50 border border-emerald-200 text-xs font-semibold px-2 py-1 rounded-full">
+            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"/>
+            <span className="hidden sm:inline">Live</span>
+          </span>
         </header>
 
-        {/* Main content — extra bottom padding on mobile for bottom nav */}
         <main className="flex-1 p-3 md:p-6 overflow-auto animate-fade-in pb-20 md:pb-6">
           <Routes>
             <Route path="/"              element={<Dashboard />} />
             <Route path="/opportunities" element={<Opportunities />} />
+            <Route path="/sled"          element={<SLEDBids />} />
             <Route path="/recompetes"    element={<Recompetes />} />
             <Route path="/municipal"     element={<Municipal />} />
             <Route path="/pipeline"      element={<Pipeline />} />
             <Route path="/pricing"       element={<Pricing />} />
             <Route path="/proposals"     element={<Proposals />} />
             <Route path="/intelligence"  element={<Intelligence />} />
+            <Route path="/compliance"    element={<ComplianceChecker />} />
             <Route path="/agencies"      element={<AgencyTracker />} />
             <Route path="/roi"           element={<ROITracker />} />
             <Route path="/setup"         element={<CompanySetup />} />
@@ -339,19 +332,17 @@ function AppLayout({ user, onLogout }) {
           </Routes>
         </main>
 
-        {/* Mobile bottom nav bar */}
         <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-black border-t border-white/10 z-20">
           <div className="flex items-center justify-around px-2 py-2 safe-area-bottom">
             {MOBILE_NAV.map(item => {
-              const isMore = item.to === '/more';
-              if (isMore) {
+              if (item.to === '/more') {
                 return (
                   <button key="more" onClick={() => setDrawerOpen(true)}
                     className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-lg transition-colors min-w-0 ${
                       drawerOpen ? 'text-white' : 'text-gray-500'
                     }`}>
                     <span className="flex-shrink-0">{item.icon}</span>
-                    <span className="text-[10px] font-medium truncate">{item.label}</span>
+                    <span className="text-[10px] font-medium">{item.label}</span>
                   </button>
                 );
               }
