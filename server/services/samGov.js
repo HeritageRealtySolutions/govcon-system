@@ -64,9 +64,6 @@ function buildParams(postedFrom, postedTo) {
   for (const code of NAICS_CODES) {
     params.append('naicsCode', code);
   }
-  for (const sa of SET_ASIDES) {
-    params.append('typeOfSetAside', sa);
-  }
   return params;
 }
 
