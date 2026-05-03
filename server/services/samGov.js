@@ -55,11 +55,12 @@ function formatDate(date) {
 
 function buildParams(postedFrom, postedTo) {
   const params = new URLSearchParams({
-    api_key:    process.env.SAM_API_KEY,
-    limit:      '100',
+    api_key:   process.env.SAM_API_KEY,
+    limit:     '100',
     postedFrom,
     postedTo,
-    ptype:      'o',
+    ptype:     'o',
+    naicsCode: NAICS_CODES.join(','),
   });
   for (const sa of SET_ASIDES) {
     params.append('typeOfSetAside', sa);
@@ -70,7 +71,7 @@ function buildParams(postedFrom, postedTo) {
 async function fetchOpportunities() {
   if (!process.env.SAM_API_KEY) throw new Error('SAM_API_KEY not set');
 
-  const today        = new Date();
+  const today         = new Date();
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(today.getDate() - 30);
 
@@ -98,7 +99,7 @@ async function fetchOpportunities() {
 async function syncSAMOpportunities() {
   if (!process.env.SAM_API_KEY) throw new Error('SAM_API_KEY not set');
 
-  const today        = new Date();
+  const today         = new Date();
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(today.getDate() - 30);
 
