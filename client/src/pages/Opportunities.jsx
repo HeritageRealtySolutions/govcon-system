@@ -138,10 +138,10 @@ export default function Opportunities() {
   <p className="text-gray-700 text-xs font-semibold uppercase tracking-wider mb-3">📊 Bid Score Guide</p>
   <div className="flex flex-wrap gap-4">
     {[
-      { range: '70–100', label: 'Hot Lead',     cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', desc: '8(a) set-aside, your NAICS, good value & timeline' },
-      { range: '40–69',  label: 'Worth Review', cls: 'bg-amber-50 text-amber-700 border-amber-200',   desc: 'Small business set-aside or partial match' },
-      { range: '1–39',   label: 'Low Priority', cls: 'bg-gray-100 text-gray-600 border-gray-200',     desc: 'Open competition or outside core NAICS' },
-      { range: '0',      label: 'Not Scored',   cls: 'bg-gray-100 text-gray-400 border-gray-200',     desc: 'Outside your registered NAICS codes' },
+      { range: '70–100', label: 'Hot Lead',     cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', desc: 'Strong NAICS match, good value, comfortable deadline' },
+      { range: '40–69',  label: 'Worth Review', cls: 'bg-amber-50 text-amber-700 border-amber-200',       desc: 'Solid opportunity — evaluate scope and timeline' },
+      { range: '1–39',   label: 'Low Priority', cls: 'bg-gray-100 text-gray-600 border-gray-200',         desc: 'Marginal fit — bid only if pipeline is light' },
+      { range: '0',      label: 'Not Scored',   cls: 'bg-gray-100 text-gray-400 border-gray-200',         desc: 'Outside registered NAICS codes' },
     ].map(s => (
       <div key={s.range} className="flex items-center gap-2">
         <span className={`text-xs font-bold px-2 py-0.5 rounded-full border flex-shrink-0 ${s.cls}`}>{s.range}</span>
@@ -153,7 +153,7 @@ export default function Opportunities() {
     ))}
   </div>
   <p className="text-gray-400 text-xs mt-3">
-    Score factors: Set-aside type (40pts) · NAICS match (20pts) · Contract value $100K–$2M (20pts) · Deadline comfort (20pts)
+    Score factors: NAICS match (35pts) · Contract value $100K–$2M (30pts) · Deadline comfort (20pts) · Set-aside bonus (15pts)
   </p>
 </div>
       {/* Table */}
