@@ -208,6 +208,7 @@ function MobileDrawer({ open, onClose, user, onLogout }) {
           </button>
         </div>
       </div>
+      <QuickAddWidget />
     </div>
   );
 }
