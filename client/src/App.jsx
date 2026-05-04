@@ -363,6 +363,7 @@ function AppLayout({ user, onLogout }) {
           </div>
         </nav>
       </div>
+      <QuickAddWidget />
     </div>
   );
 }
