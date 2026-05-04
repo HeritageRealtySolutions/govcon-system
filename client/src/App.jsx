@@ -175,10 +175,7 @@ function MobileDrawer({ open, onClose, user, onLogout }) {
           <div className="mx-4 mb-3 bg-white/5 rounded-xl px-4 py-3">
             <p className="text-gray-400 text-xs">{user?.email}</p>
             <p className="text-white text-sm font-semibold mt-0.5">Lumen Capital LLC</p>
-            <div className="flex items-center gap-1 mt-1">
-              <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full"/>
-              <span className="text-emerald-400 text-xs font-medium">8(a) Certified</span>
-            </div>
+          
           </div>
         )}
         <div className="px-4 pb-8 space-y-4">
