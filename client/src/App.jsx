@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import QuickAddWidget from './components/QuickAddWidget';
 import { BrowserRouter, Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom';
 import logoImg from '../IMG_1447-removebg-preview.PNG';
 import Dashboard from './pages/Dashboard';
