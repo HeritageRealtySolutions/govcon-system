@@ -8,20 +8,46 @@ const NAICS_CODES = [
 
 function calcBidScore(opp) {
   let score = 0;
+
+  // NAICS match — primary factor (35pts)
+  const naics = opp.naicsCode || '';
+  if (naics === '236220') score += 35;        // Primary — General Construction
+  else if (naics === '237310') score += 35;   // Highway/Bridge
+  else if (naics === '561730') score += 35;   // Landscaping
+  else if (naics === '236116') score += 30;   // Multifamily
+  else if (naics === '236115') score += 30;   // Single Family
+  else if (naics === '532412') score += 25;   // Equipment Rental
+  else if (naics === '333120') score += 25;   // Construction Machinery
+  else if (naics === '541320') score += 25;   // Landscape Architecture
+  else score += 0;                            // Outside registered codes
+
+  // Set-aside bonus — secondary factor (15pts max)
   const setAside = (opp.typeOfSetAside || '').toUpperCase();
-  if (setAside === '8AN') score += 40;
-  else if (['SBA', 'SBP', 'WOSB'].includes(setAside)) score += 25;
-  if (opp.naicsCode === '236220') score += 20;
-  else if (NAICS_CODES.includes(opp.naicsCode)) score += 10;
+  if (['8AN', 'SBA', 'SBP', 'SDVOSBC', 'WOSB', 'WOSBSS'].includes(setAside)) score += 15;
+  else if (setAside && setAside !== 'NONE') score += 5;
+  // Full and open = no bonus, but no penalty either
+
+  // Contract value sweet spot (30pts)
+  const val = parseFloat(opp.award?.amount || 0);
+  if (val >= 100000 && val <= 750000)       score += 30; // Ideal range
+  else if (val >= 750000 && val <= 2000000) score += 20; // Good range
+  else if (val >= 50000 && val < 100000)    score += 10; // Small but viable
+  else if (val > 2000000)                   score += 10; // Large — bonding risk
+  else                                      score += 15; // Unknown value — neutral
+
+  // Deadline comfort (20pts)
   const deadline = opp.responseDeadLine ? new Date(opp.responseDeadLine) : null;
   if (deadline) {
     const daysOut = (deadline - new Date()) / (1000 * 60 * 60 * 24);
-    if (daysOut > 14) score += 20;
-    else if (daysOut >= 7) score += 10;
+    if (daysOut >= 21)      score += 20;
+    else if (daysOut >= 14) score += 15;
+    else if (daysOut >= 7)  score += 8;
+    else if (daysOut >= 3)  score += 3;
+    else                    score += 0;
+  } else {
+    score += 10; // No deadline listed — neutral
   }
-  const maxVal = parseFloat(opp.award?.amount || 0);
-  if (maxVal >= 100000 && maxVal <= 2000000) score += 20;
-  else if (maxVal > 0 && maxVal < 100000) score += 5;
+
   return Math.min(score, 100);
 }
 
@@ -93,32 +119,26 @@ async function fetchOpportunities() {
 
   const postedFrom = formatDate(thirtyDaysAgo);
   const postedTo   = formatDate(today);
-
-  const allItems = [];
-  const MAX_PAGES = 10;
+  const allItems   = [];
+  const MAX_PAGES  = 10;
 
   for (let page = 0; page < MAX_PAGES; page++) {
     const offset = page * 100;
     const params = buildParams(postedFrom, postedTo, offset);
     const url    = `https://api.sam.gov/opportunities/v2/search?${params}`;
 
-    if (page === 0) {
-      console.log('[SAM.gov] GET', url.replace(process.env.SAM_API_KEY, '***'));
-    }
+    if (page === 0) console.log('[SAM.gov] GET', url.replace(process.env.SAM_API_KEY, '***'));
 
     const { items, total } = await fetchPage(url);
     allItems.push(...items);
 
-    console.log(`[SAM.gov] Page ${page + 1}: ${items.length} items | Total available: ${total} | Fetched so far: ${allItems.length}`);
+    console.log(`[SAM.gov] Page ${page + 1}: ${items.length} items | Total: ${total} | Fetched: ${allItems.length}`);
 
-    // Stop if we've fetched everything or hit our limit
     if (items.length < 100 || allItems.length >= 1000 || allItems.length >= total) break;
-
-    // Small delay to be respectful to the API
     await new Promise(r => setTimeout(r, 500));
   }
 
-  console.log(`[SAM.gov] Final count: ${allItems.length} opportunities`);
+  console.log(`[SAM.gov] Final count: ${allItems.length}`);
   return allItems.map(parseOpportunity);
 }
 
@@ -131,30 +151,26 @@ async function syncSAMOpportunities() {
 
   const postedFrom = formatDate(thirtyDaysAgo);
   const postedTo   = formatDate(today);
-
-  const allItems = [];
-  const MAX_PAGES = 10;
+  const allItems   = [];
+  const MAX_PAGES  = 10;
 
   for (let page = 0; page < MAX_PAGES; page++) {
     const offset = page * 100;
     const params = buildParams(postedFrom, postedTo, offset);
     const url    = `https://api.sam.gov/opportunities/v2/search?${params}`;
 
-    if (page === 0) {
-      console.log('[SAM.gov] Sync GET', url.replace(process.env.SAM_API_KEY, '***'));
-    }
+    if (page === 0) console.log('[SAM.gov] Sync GET', url.replace(process.env.SAM_API_KEY, '***'));
 
     const { items, total } = await fetchPage(url);
     allItems.push(...items);
 
-    console.log(`[SAM.gov] Sync Page ${page + 1}: ${items.length} items | Total: ${total} | So far: ${allItems.length}`);
+    console.log(`[SAM.gov] Sync Page ${page + 1}: ${items.length} | Total: ${total} | So far: ${allItems.length}`);
 
     if (items.length < 100 || allItems.length >= 1000 || allItems.length >= total) break;
-
     await new Promise(r => setTimeout(r, 500));
   }
 
-  console.log(`[SAM.gov] Sync total fetched: ${allItems.length}`);
+  console.log(`[SAM.gov] Sync total: ${allItems.length}`);
 
   let saved = 0;
   for (const item of allItems) {
