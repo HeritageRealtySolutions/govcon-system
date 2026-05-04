@@ -251,10 +251,7 @@ function Sidebar({ user, onLogout, collapsed, setCollapsed }) {
           <div className="bg-white/5 rounded-lg px-3 py-2">
             <p className="text-gray-400 text-xs truncate">{user?.email}</p>
             <p className="text-white text-xs font-semibold truncate mt-0.5">Lumen Capital LLC</p>
-            <div className="flex items-center gap-1 mt-1">
-              <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full"/>
-              <span className="text-emerald-400 text-[10px] font-medium">8(a) Certified</span>
-            </div>
+          
           </div>
         )}
         {!collapsed && (
