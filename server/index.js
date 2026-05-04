@@ -103,6 +103,7 @@ async function start() {
   app.use('/api/auth', require('./routes/auth'));
 
   const { requireAuth } = require('./middleware/auth');
+  app.use('/api/quick-add', requireAuth, require('./routes/quickAdd'));
   app.use('/api/opportunities', requireAuth, require('./routes/opportunities'));
   app.use('/api/municipal',     requireAuth, require('./routes/municipal'));
   app.use('/api/pipeline',      requireAuth, require('./routes/pipeline'));
