@@ -57,32 +57,60 @@ const EXTRACT_PROMPT = `Extract government bid information from the content belo
   "state": "2-letter state code if location identifiable, else empty"
 }`;
 
-async function extractWithGemini(content) {
-  if (!process.env.GEMINI_API_KEY) throw new Error('Gemini not configured');
-  const r = await axios.post(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-    {
-      contents: [{ role: 'user', parts: [{ text: `${EXTRACT_PROMPT}\n\nCONTENT:\n${content.substring(0, 8000)}` }] }],
-      generationConfig: { maxOutputTokens: 1024, temperature: 0.2 },
-    },
-    { timeout: 30000 }
-  );
-  const text = r.data.candidates[0].content.parts[0].text.trim().replace(/```json|```/g, '').trim();
-  const parsed = JSON.parse(text);
-  if (!parsed.naics_code) parsed.naics_code = guessNaics(parsed.description || parsed.title || '');
-  return parsed;
-}
-
 async function fetchUrl(url) {
-  const r = await axios.get(url, {
-    timeout: 15000,
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LumenBidIntel/1.0)' },
-    maxContentLength: 2 * 1024 * 1024,
-  });
-  return String(r.data).replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  try {
+    const r = await axios.get(url, {
+      timeout: 15000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      maxContentLength: 2 * 1024 * 1024,
+    });
+    return String(r.data)
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  } catch (err) {
+    console.warn('[QuickAdd] URL fetch failed:', err.response?.status, err.message);
+    return '';
+  }
 }
 
-// POST /api/quick-add/extract — preview only, no save
+async function extractWithGemini(content, retries = 3) {
+  if (!process.env.GEMINI_API_KEY) throw new Error('Gemini not configured');
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const r = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+        {
+          contents: [{ role: 'user', parts: [{ text: `${EXTRACT_PROMPT}\n\nCONTENT:\n${content.substring(0, 8000)}` }] }],
+          generationConfig: { maxOutputTokens: 1024, temperature: 0.2 },
+        },
+        { timeout: 30000 }
+      );
+      const text = r.data.candidates[0].content.parts[0].text.trim().replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(text);
+      if (!parsed.naics_code) parsed.naics_code = guessNaics(parsed.description || parsed.title || '');
+      return parsed;
+    } catch (err) {
+      const status = err.response?.status;
+      if (status === 429 && attempt < retries) {
+        const wait = attempt * 5000;
+        console.log(`[Gemini] Rate limited — waiting ${wait/1000}s before retry ${attempt + 1}/${retries}`);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+      if (status === 429) throw new Error('Gemini is rate limited — please wait 60 seconds and try again');
+      throw err;
+    }
+  }
+}
+
+// POST /api/quick-add/extract
 router.post('/extract', async (req, res) => {
   try {
     const { input } = req.body;
@@ -91,59 +119,55 @@ router.post('/extract', async (req, res) => {
     let content = input;
     let sourceUrl = '';
 
-    // URL detection — if input starts with http or contains a domain pattern
     const urlMatch = input.match(/https?:\/\/[^\s]+/);
     if (urlMatch) {
       sourceUrl = urlMatch[0];
-      try {
-        content = await fetchUrl(sourceUrl);
-      } catch (fetchErr) {
-        // If URL fetch fails, fall back to using input as text
-        console.warn('URL fetch failed, using as text:', fetchErr.message);
-        content = input;
+      const fetched = await fetchUrl(sourceUrl);
+      if (fetched && fetched.length > 100) {
+        content = fetched;
+      } else {
+        content = `URL: ${sourceUrl}\n\nNote: Could not fetch page content. Extract what you can from the URL structure and any text provided.`;
       }
     }
 
     const extracted = await extractWithGemini(content);
-    res.json({ ...extracted, source_url: sourceUrl });
+    if (sourceUrl) extracted.source_url = sourceUrl;
+    res.json(extracted);
   } catch (err) {
     console.error('Quick add extract error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST /api/quick-add/save — extract + save + add to pipeline in one call
+// POST /api/quick-add/save
 router.post('/save', async (req, res) => {
   try {
     const { bid, addToPipeline } = req.body;
     if (!bid?.title?.trim()) return res.status(400).json({ error: 'Title required' });
 
-    // Calculate score
     const bid_score = calcBidScore(bid);
 
-    // Save to municipal_bids
     const { data: saved, error: saveError } = await supabase.from('municipal_bids').insert({
-      title:              bid.title.trim(),
-      agency:             bid.agency || null,
-      naics_code:         bid.naics_code || '236220',
-      bid_number:         bid.bid_number || null,
-      response_deadline:  bid.response_deadline || null,
-      estimated_value:    parseFloat(bid.estimated_value) || null,
-      description:        bid.description || null,
-      contact_name:       bid.contact_name || null,
-      contact_email:      bid.contact_email || null,
-      source_url:         bid.source_url || null,
-      set_aside_type:     bid.set_aside_type || null,
-      state:              bid.state || null,
+      title:             bid.title.trim(),
+      agency:            bid.agency || null,
+      naics_code:        bid.naics_code || '236220',
+      bid_number:        bid.bid_number || null,
+      response_deadline: bid.response_deadline || null,
+      estimated_value:   parseFloat(bid.estimated_value) || null,
+      description:       bid.description || null,
+      contact_name:      bid.contact_name || null,
+      contact_email:     bid.contact_email || null,
+      source_url:        bid.source_url || null,
+      set_aside_type:    bid.set_aside_type || null,
+      state:             bid.state || null,
       bid_score,
-      status:             'new',
+      status:            'new',
     }).select().single();
 
     if (saveError) throw saveError;
 
     let pipelineEntry = null;
     if (addToPipeline) {
-      // Check for existing pipeline entry to avoid duplicates
       const { data: existing } = await supabase
         .from('pipeline')
         .select('id')
@@ -152,16 +176,16 @@ router.post('/save', async (req, res) => {
 
       if (!existing) {
         const { data: pipe } = await supabase.from('pipeline').insert({
-          title:           saved.title,
-          agency:          saved.agency,
-          naics_code:      saved.naics_code,
-          source:          'quick_add',
+          title:            saved.title,
+          agency:           saved.agency,
+          naics_code:       saved.naics_code,
+          source:           'quick_add',
           municipal_bid_id: saved.id,
-          deadline:        saved.response_deadline,
-          proposed_price:  saved.estimated_value,
+          deadline:         saved.response_deadline,
+          proposed_price:   saved.estimated_value,
           bid_score,
-          status:          'reviewing',
-          notes:           saved.source_url ? `Source: ${saved.source_url}` : 'Added via Quick Add',
+          status:           'reviewing',
+          notes:            saved.source_url ? `Source: ${saved.source_url}` : 'Added via Quick Add',
         }).select().single();
         pipelineEntry = pipe;
       } else {
@@ -169,18 +193,14 @@ router.post('/save', async (req, res) => {
       }
     }
 
-    res.json({
-      success:     true,
-      bid:         saved,
-      pipeline_id: pipelineEntry?.id,
-    });
+    res.json({ success: true, bid: saved, pipeline_id: pipelineEntry?.id });
   } catch (err) {
     console.error('Quick add save error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// GET recent quick adds (last 5)
+// GET recent quick adds
 router.get('/recent', async (req, res) => {
   try {
     const { data } = await supabase
