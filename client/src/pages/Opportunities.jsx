@@ -133,7 +133,29 @@ export default function Opportunities() {
           </button>
         )}
       </div>
-
+{/* Scoring Legend */}
+<div className="bg-white border border-gray-200 rounded-xl shadow-sm px-5 py-4">
+  <p className="text-gray-700 text-xs font-semibold uppercase tracking-wider mb-3">📊 Bid Score Guide</p>
+  <div className="flex flex-wrap gap-4">
+    {[
+      { range: '70–100', label: 'Hot Lead',     cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', desc: '8(a) set-aside, your NAICS, good value & timeline' },
+      { range: '40–69',  label: 'Worth Review', cls: 'bg-amber-50 text-amber-700 border-amber-200',   desc: 'Small business set-aside or partial match' },
+      { range: '1–39',   label: 'Low Priority', cls: 'bg-gray-100 text-gray-600 border-gray-200',     desc: 'Open competition or outside core NAICS' },
+      { range: '0',      label: 'Not Scored',   cls: 'bg-gray-100 text-gray-400 border-gray-200',     desc: 'Outside your registered NAICS codes' },
+    ].map(s => (
+      <div key={s.range} className="flex items-center gap-2">
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full border flex-shrink-0 ${s.cls}`}>{s.range}</span>
+        <div>
+          <span className="text-gray-700 text-xs font-semibold">{s.label}</span>
+          <span className="text-gray-400 text-xs ml-1">— {s.desc}</span>
+        </div>
+      </div>
+    ))}
+  </div>
+  <p className="text-gray-400 text-xs mt-3">
+    Score factors: Set-aside type (40pts) · NAICS match (20pts) · Contract value $100K–$2M (20pts) · Deadline comfort (20pts)
+  </p>
+</div>
       {/* Table */}
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
